@@ -44,7 +44,7 @@ public:
   //! decayer initialization
   virtual void Initialize (void) const = 0; 
 
-  //! return a TClonesArray of TMCParticle objects (NOTE: all TMCParticle units in GeV^n [hbar=c=1])
+  //! return a TClonesArray of GHepParticle objects (NOTE: all GHepParticle units in GeV^n [hbar=c=1])
   virtual TClonesArray * Decay (const DecayerInputs_t & inp) const = 0; 
 
   //! last decay weight

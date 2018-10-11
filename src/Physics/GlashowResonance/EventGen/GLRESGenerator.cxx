@@ -20,12 +20,6 @@
 
 #include <cstring>
 
-#include <RVersion.h>
-#if ROOT_VERSION_CODE >= ROOT_VERSION(5,15,6)
-#include <TMCParticle.h>
-#else
-#include <TMCParticle6.h>
-#endif
 #include <TClonesArray.h>
 #include <TMath.h>
 
@@ -101,25 +95,23 @@ void GLRESGenerator::ProcessEventRecord(GHepRecord * event) const
   //
 
   double mass = p4_W.M();
-  char p6frame[10], p6nu[10], p6tgt[10];
-  strcpy(p6frame, "CMS"    );
-  strcpy(p6nu,    "nu_ebar");
-  strcpy(p6tgt,   "e-"     );
-  fPythia->Pyinit(p6frame, p6nu, p6tgt, mass);
-  fPythia->Pyevnt();
-  fPythia->Pylist(1);
+  fPythia8->Pythia8()->readString("Print:quiet           = on");
+  fPythia8->Pythia8()->readString("PDF:lepton            = off");
+  fPythia8->Pythia8()->readString("WeakBosonExchange:all = on");
 
-  // get LUJETS record
-  fPythia->GetPrimaries();
-  TClonesArray * pythia_particles =
-       (TClonesArray *) fPythia->ImportParticles("All");
+  fPythia8->Pythia8()->settings.mode("Beams:idA", -12); // nu_ebar
+  fPythia8->Pythia8()->settings.mode("Beams:idB", 11); // e-
+  fPythia8->Pythia8()->settings.mode("Beams:frameType", 1);
+  fPythia8->Pythia8()->settings.parm("Beams:eCM", mass);
+
+  fPythia8->Pythia8()->next();
+  fPythia8->Pythia8()->event.list();
 
   // copy PYTHIA container to a new TClonesArray so as to transfer ownership
   // of the container and of its elements to the calling method
-  int np = pythia_particles->GetEntries();
-  assert(np>0);
-  TClonesArray * particle_list = new TClonesArray("TMCParticle", np);
-  particle_list->SetOwner(true);
+  Pythia8::Event &fEvent = fPythia8->Pythia8()->event;
+  int numpart = fEvent.size();
+  assert(numpart>0);
 
   // Vector defining rotation from LAB to LAB' (z:= \vec{resonance momentum})
   TVector3 unitvq = p4_W.Vect().Unit();
@@ -127,13 +119,11 @@ void GLRESGenerator::ProcessEventRecord(GHepRecord * event) const
   // Boost velocity LAB' -> Resonance rest frame
   TVector3 beta(0,0,p4_W.P()/p4_W.Energy());
 
-  TMCParticle * p = 0;
-  TIter piter(pythia_particles);
-  while( (p = (TMCParticle *) piter.Next()) ) {
-     int pdgc = p->GetKF();
-     int ist  = p->GetKS();
-     if(ist == 1) {
-        TLorentzVector p4o(p->GetPx(), p->GetPy(), p->GetPz(), p->GetEnergy());
+  for (int i = 1; i < numpart; ++i) {
+    int pdgc = fEvent[i].id();
+    int ist  = fEvent[i].status();
+    if(ist > 0) {
+        TLorentzVector p4o(fEvent[i].px(), fEvent[i].py(), fEvent[i].pz(), fEvent[i].e());
         p4o.Boost(beta); 
         TVector3 p3 = p4o.Vect();
         p3.RotateUz(unitvq); 
@@ -158,9 +148,9 @@ void GLRESGenerator::Configure(string config)
 //____________________________________________________________________________
 void GLRESGenerator::LoadConfig(void)
 {
- fPythia = TPythia6::Instance();
+ fPythia8 = PythiaSingleton::Instance();
 
- // sync GENIE/PYTHIA6 seed number
+ // sync GENIE/PYTHIA8 seed number
  RandomGen::Instance();
 }
 //____________________________________________________________________________

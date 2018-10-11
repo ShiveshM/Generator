@@ -13,13 +13,7 @@
 */
 //____________________________________________________________________________
 
-#include <RVersion.h>
-#if ROOT_VERSION_CODE >= ROOT_VERSION(5,15,6)
-#include <TMCParticle.h>
-#else
-#include <TMCParticle6.h>
-#endif
-#include <TPythia6.h>
+#include <TPythia8.h>
 #include <TVector3.h>
 #include <TF1.h>
 #include <TROOT.h>
@@ -29,6 +23,7 @@
 #include "Framework/Conventions/Controls.h"
 #include "Physics/Hadronization/CharmHadronization.h"
 #include "Physics/Hadronization/FragmentationFunctionI.h"
+#include "Framework/GHEP/GHepParticle.h"
 #include "Framework/Messenger/Messenger.h"
 #include "Framework/Numerical/RandomGen.h"
 #include "Framework/Numerical/Spline.h"
@@ -43,9 +38,6 @@
 using namespace genie;
 using namespace genie::constants;
 using namespace genie::controls;
-
-extern "C" void py1ent_(int *,  int *, double *, double *, double *);
-extern "C" void py2ent_(int *,  int *, int *, double *);
 
 //____________________________________________________________________________
 CharmHadronization::CharmHadronization() :
@@ -77,7 +69,11 @@ CharmHadronization::~CharmHadronization()
 //____________________________________________________________________________
 void CharmHadronization::Initialize(void) const
 {
-  fPythia = TPythia6::Instance();
+  fPythia8 = PythiaSingleton::Instance();
+
+  fPythia8->Pythia8()->readString("ProcessLevel:all = off");
+  fPythia8->Pythia8()->readString("Print:quiet      = on");
+  fPythia8->Pythia8()->init();
 }
 //____________________________________________________________________________
 TClonesArray * CharmHadronization::Hadronize(
@@ -311,14 +307,14 @@ TClonesArray * CharmHadronization::Hadronize(
   //
   if(fCharmOnly) {
     // Create particle list (fragmentation record)
-    TClonesArray * particle_list = new TClonesArray("TMCParticle", 2);
+    TClonesArray * particle_list = new TClonesArray("genie::GHepParticle", 2);
     particle_list->SetOwner(true);
 
     // insert the generated particles
-    new ((*particle_list)[0]) TMCParticle (1,ch_pdg,
-	     -1,-1,-1, p4C.Px(),p4C.Py(),p4C.Pz(),p4C.E(),MC, 0,0,0,0,0);
-    new ((*particle_list)[1]) TMCParticle (1,kPdgHadronicBlob,
-             -1,-1,-1, p4R.Px(),p4R.Py(),p4R.Pz(),p4R.E(),WR, 0,0,0,0,0);
+    new ((*particle_list)[0]) GHepParticle (ch_pdg, kIStStableFinalState,
+	     -1,-1,-1, -1, p4C.Px(),p4C.Py(),p4C.Pz(),p4C.E(), 0,0,0,0);
+    new ((*particle_list)[1]) GHepParticle (kPdgHadronicBlob, kIStStableFinalState,
+             -1,-1,-1, -1, p4R.Px(),p4R.Py(),p4R.Pz(),p4R.E(), 0,0,0,0);
 
     return particle_list;
   }
@@ -330,16 +326,16 @@ TClonesArray * CharmHadronization::Hadronize(
   //
   if(used_lowW_strategy) {
     // Create particle list (fragmentation record)
-    TClonesArray * particle_list = new TClonesArray("TMCParticle", 3);
+    TClonesArray * particle_list = new TClonesArray("genie::GHepParticle", 3);
     particle_list->SetOwner(true);
 
     // insert the generated particles
-    new ((*particle_list)[0]) TMCParticle (1,ch_pdg,
-	     -1,-1,-1, p4C.Px(),p4C.Py(),p4C.Pz(),p4C.E(),MC, 0,0,0,0,0);
-    new ((*particle_list)[1]) TMCParticle (11,kPdgHadronicBlob,
-               -1,2,2, p4R.Px(),p4R.Py(),p4R.Pz(),p4R.E(),WR, 0,0,0,0,0);
-    new ((*particle_list)[2]) TMCParticle (1,fs_nucleon_pdg,
-              1,-1,-1, p4R.Px(),p4R.Py(),p4R.Pz(),p4R.E(),WR, 0,0,0,0,0);
+    new ((*particle_list)[0]) GHepParticle (ch_pdg,kIStStableFinalState,
+	    -1,-1,-1,-1, p4C.Px(),p4C.Py(),p4C.Pz(),p4C.E(), 0,0,0,0);
+    new ((*particle_list)[1]) GHepParticle (kPdgHadronicBlob,kIStNucleonTarget,
+            -1,-1,2,2, p4R.Px(),p4R.Py(),p4R.Pz(),p4R.E(), 0,0,0,0);
+    new ((*particle_list)[2]) GHepParticle (fs_nucleon_pdg,kIStStableFinalState,
+            1,1,-1,-1, p4R.Px(),p4R.Py(),p4R.Pz(),p4R.E(), 0,0,0,0);
 
     return particle_list;
   }
@@ -354,13 +350,13 @@ TClonesArray * CharmHadronization::Hadronize(
   // Insert the generated charm hadron & the hadronic (non-charm) blob.
   // In this case the hadronic blob is entered as a pre-fragm. state.
 
-  TClonesArray * particle_list = new TClonesArray("TMCParticle");
+  TClonesArray * particle_list = new TClonesArray("genie::GHepParticle");
   particle_list->SetOwner(true);
 
-  new ((*particle_list)[0]) TMCParticle (1,ch_pdg,
-                  -1,-1,-1,  p4C.Px(),p4C.Py(),p4C.Pz(),p4C.E(),MC, 0,0,0,0,0);
-  new ((*particle_list)[1]) TMCParticle (11,kPdgHadronicBlob,
-                     -1,2,3, p4R.Px(),p4R.Py(),p4R.Pz(),p4R.E(),WR, 0,0,0,0,0);
+  new ((*particle_list)[0]) GHepParticle (ch_pdg,kIStStableFinalState,
+          -1,-1,-1,-1,  p4C.Px(),p4C.Py(),p4C.Pz(),p4C.E(), 0,0,0,0);
+  new ((*particle_list)[1]) GHepParticle (kPdgHadronicBlob,kIStNucleonTarget,
+          -1,-1,2,3, p4R.Px(),p4R.Py(),p4R.Pz(),p4R.E(), 0,0,0,0);
 
   unsigned int rpos =2; // offset in event record
 
@@ -481,59 +477,69 @@ TClonesArray * CharmHadronization::Hadronize(
      //
      // Run PYTHIA for the hadronization of remnant system
      //
-     fPythia->SetMDCY(fPythia->Pycomp(kPdgPi0),              1,0); // don't decay pi0
-     fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaM),  1,1); // decay Delta+
-     fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_Delta0),  1,1); // decay Delta++
-     fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaP),  1,1); // decay Delta++
-     fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaPP), 1,1); // decay Delta++
-//   fPythia->SetMDCY(fPythia->Pycomp(kPdgDeltaP),  1,1); // decay Delta+
-//   fPythia->SetMDCY(fPythia->Pycomp(kPdgDeltaPP), 1,1); // decay Delta++
-
-     int ip = 0;
-     py2ent_(&ip, &qrkSyst1, &qrkSyst2, &WR); // hadronize
-
-     fPythia->SetMDCY(fPythia->Pycomp(kPdgPi0),1,1); // restore
-
-     //-- Get PYTHIA's LUJETS event record
-     TClonesArray * remnants = 0;
-     fPythia->GetPrimaries();
-     remnants = dynamic_cast<TClonesArray *>(fPythia->ImportParticles("All"));
-     if(!remnants) {
-         LOG("CharmHad", pWARN) << "Couldn't hadronize (non-charm) remnants!";
-         return 0;
-      }
-
-      // PYTHIA performs the hadronization at the *remnant hadrons* centre of mass 
-      // frame  (not the hadronic centre of mass frame). 
-      // Boost all hadronic blob fragments to the HCM', fix their mother/daughter 
-      // assignments and add them to the fragmentation record.
-
-      TVector3 rmnbeta = +1 * p4R.BoostVector(); // boost velocity
-
-      TMCParticle * remn  = 0; // remnant
-      TMCParticle * bremn = 0; // boosted remnant
-      TIter remn_iter(remnants);
-      while( (remn = (TMCParticle *) remn_iter.Next()) ) {
-
-         // insert and get a pointer to inserted object for mods
-         bremn = new ((*particle_list)[rpos++]) TMCParticle (*remn);
-
-         // boost 
-         TLorentzVector p4(remn->GetPx(),remn->GetPy(),remn->GetPz(),remn->GetEnergy());
-         p4.Boost(rmnbeta);
-         bremn -> SetPx     (p4.Px());
-         bremn -> SetPy     (p4.Py());
-         bremn -> SetPz     (p4.Pz());
-         bremn -> SetEnergy (p4.E() );
-
-         // handle insertion of charmed hadron 
-         int jp  = bremn->GetParent();
-         int ifc = bremn->GetFirstChild();
-         int ilc = bremn->GetLastChild();
-         bremn -> SetParent     ( (jp  == 0 ?  1 : jp +1) );
-         bremn -> SetFirstChild ( (ifc == 0 ? -1 : ifc+1) );
-         bremn -> SetLastChild  ( (ilc == 0 ? -1 : ilc+1) );
-      }
+     fPythia8->Pythia8()->particleData.mayDecay(kPdgPi0,              false); // don't decay pi0
+     fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaM,  true); // decay Delta+
+     fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_Delta0,  true); // decay Delta++
+     fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaP,  true); // decay Delta++
+     fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaPP, true); // decay Delta++
+//   fPythia8->Pythia8()->particleData.mayDecay(kPdgDeltaP,  true); // decay Delta+
+//   fPythia8->Pythia8()->particleData.mayDecay(kPdgDeltaPP, true); // decay Delta++
+      // -- hadronize --
+      double mA    = fPythia8->Pythia8()->particleData.m0(qrkSyst1);
+     double mB    = fPythia8->Pythia8()->particleData.m0(qrkSyst2);
+     double pzAcm = 0.5 * Pythia8::sqrtpos( (WR + mA + mB) * (WR - mA - mB) * (WR - mA + mB) * (WR + mA - mB) ) / WR;
+     double pzBcm = -pzAcm;
+     double eA    = sqrt(mA*mA + pzAcm*pzAcm);
+     double eB    = sqrt(mB*mB + pzBcm*pzBcm);
+      fPythia8->Pythia8()->event.reset();
+       // Pythia8 status code for outgoing particles of the hardest subprocesses is 23
+      // anti/colour tags for these 2 particles must complement each other
+      // antiparticles must have positive anticolour to avoid PYTHIA errors
+     if (qrkSyst1 > 0) {
+         fPythia8->Pythia8()->event.append(qrkSyst1, 23, 101, 0, 0., 0., pzAcm, eA, mA);
+         fPythia8->Pythia8()->event.append(qrkSyst2, 23, 0, 101, 0., 0., pzBcm, eB, mB);
+     } else {
+         fPythia8->Pythia8()->event.append(qrkSyst1, 23, 0, 101, 0., 0., pzAcm, eA, mA);
+         fPythia8->Pythia8()->event.append(qrkSyst2, 23, 101, 0, 0., 0., pzBcm, eB, mB);
+     }
+     fPythia8->Pythia8()->next();
+       // List the event information
+     fPythia8->Pythia8()->event.list();
+     fPythia8->Pythia8()->stat();
+      fPythia8->Pythia8()->particleData.mayDecay(kPdgPi0, true); // restore
+      //-- Get PYTHIA's event record
+     Pythia8::Event &fEvent = fPythia8->Pythia8()->event;
+     int numpart = fEvent.size();
+     assert(numpart>0);
+      // Offset the initial (system) particle
+     int ioff = 0;
+     if (fEvent[0].id() == 90) ioff = -1;
+      for (int i = 1; i < numpart; ++i) {
+        /*
+         * Convert Pythia8 status code to Pythia6
+         * Initial quark has a pythia6 status code of 12
+         * The initial diquark and the fragmented particles have a pythia6 code of 11
+         * Final state particle have a negative pythia8 code and a pythia6 code of 1
+         */
+        GHepStatus_t gStatus;
+        if (i == 1) gStatus = kIStDISPreFragmHadronicState;
+        else gStatus = (fEvent[i].status()>0) ? kIStStableFinalState : kIStNucleonTarget;
+        new((*particle_list)[i++]) GHepParticle(
+                fEvent[i].id(),
+                gStatus,
+                fEvent[i].mother1()   + ioff,
+                fEvent[i].mother2()   + ioff,
+                fEvent[i].daughter1() + ioff,
+                fEvent[i].daughter2() + ioff,
+                fEvent[i].px(),       // [GeV/c]
+                fEvent[i].py(),       // [GeV/c]
+                fEvent[i].pz(),       // [GeV/c]
+                fEvent[i].e(),        // [GeV]
+                fEvent[i].xProd(),    // [mm]
+                fEvent[i].yProd(),    // [mm]
+                fEvent[i].zProd(),    // [mm]
+                fEvent[i].tProd());   // [mm/c]
+     }
   } // use_pythia
 
   // ....................................................................
@@ -628,9 +634,9 @@ TClonesArray * CharmHadronization::Hadronize(
      for(unsigned int i=0; i<2; i++) {
         int pdgc = pd[i];
         TLorentzVector * p4d = fPhaseSpaceGenerator.GetDecay(i);
-        new ( (*particle_list)[rpos+i] ) TMCParticle(
-           1,pdgc,1,-1,-1,p4d->Px(),p4d->Py(),p4d->Pz(),p4d->Energy(),
-           mass[i],0,0,0,0,0);
+        new ( (*particle_list)[rpos+i] ) GHepParticle(
+           pdgc,kIStStableFinalState,1,1,-1,-1,p4d->Px(),p4d->Py(),p4d->Pz(),p4d->Energy(),
+           0,0,0,0);
      }
   } 
 

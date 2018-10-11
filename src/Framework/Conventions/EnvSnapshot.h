@@ -38,7 +38,7 @@ static const char * kMCEnv[] =
   "ROOTSYS", 
   "CERNLIB", 
   "LHAPATH", 
-  "PYTHIA6", 
+  "PYTHIA8", 
   "LIBXML2_INC", 
   "LIBXML2_LIB", 
   "LOG4CPP_INC", 

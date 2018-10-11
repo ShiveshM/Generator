@@ -29,13 +29,6 @@
 */
 //____________________________________________________________________________
 
-#include <RVersion.h>
-#if ROOT_VERSION_CODE >= ROOT_VERSION(5,15,6)
-#include <TMCParticle.h>
-#else
-#include <TMCParticle6.h>
-#endif
-
 #include "Framework/Algorithm/AlgConfigPool.h"
 #include "Framework/Conventions/Constants.h"
 #include "Framework/Conventions/Controls.h"
@@ -109,7 +102,7 @@ void DISHadronicSystemGenerator::AddFragmentationProducts(
   interaction->KinePtr()->SetW(W);
 
   //-- Run the hadronization model and get the fragmentation products:
-  //   A collection of ROOT TMCParticles (equiv. to a LUJETS record)
+  //   A collection of GHepParticle's
 
   TClonesArray * plist = fHadronizationModel->Hadronize(interaction);
   if(!plist) {
@@ -132,13 +125,13 @@ void DISHadronicSystemGenerator::AddFragmentationProducts(
   //   was asked to produce weighted events
   double wght = fHadronizationModel->Weight();
 
-  //-- Translate the fragmentation products from TMCParticles to
+  //-- Translate the fragmentation products from GHepParticle's to
   //   GHepParticles and copy them to the event record.
 
   int mom = evrec->FinalStateHadronicSystemPosition();
   assert(mom!=-1);
  
-  TMCParticle * p = 0;
+  GHepParticle * p = 0;
   TIter particle_iter(plist);
 
   bool is_nucleus = interaction->InitState().Tgt().IsNucleus();
@@ -151,10 +144,10 @@ void DISHadronicSystemGenerator::AddFragmentationProducts(
   // Boost velocity LAB' -> HCM
   TVector3 beta(0,0,p4Had.P()/p4Had.Energy());
 
-  while( (p = (TMCParticle *) particle_iter.Next()) ) {
+  while( (p = (GHepParticle *) particle_iter.Next()) ) {
 
-     int pdgc = p->GetKF();
-     int ks   = p->GetKS();
+     int pdgc = p->Pdg();
+     int ks   = p->Status();
 
      if(fFilterPreFragmEntries && ks!=1) continue;
 
@@ -164,7 +157,7 @@ void DISHadronicSystemGenerator::AddFragmentationProducts(
      // - boost it back to LAB' frame {z:=\vec{phad}} / doesn't affect pT
      // - rotate its 3-momentum from LAB' to LAB
 
-     TLorentzVector p4o(p->GetPx(), p->GetPy(), p->GetPz(), p->GetEnergy());
+     TLorentzVector p4o(p->Px(), p->Py(), p->Pz(), p->Energy());
      p4o.Boost(beta); 
      TVector3 p3 = p4o.Vect();
      p3.RotateUz(unitvq); 
@@ -179,9 +172,9 @@ void DISHadronicSystemGenerator::AddFragmentationProducts(
                         pdg::IsNeutralLepton(pdgc) || pdg::IsChargedLepton(pdgc));
      if(not_hadron)  { ist = kIStStableFinalState; }
 
-     int im  = mom + 1 + p->GetParent();
-     int ifc = (p->GetFirstChild() == -1) ? -1 : mom + 1 + p->GetFirstChild();
-     int ilc = (p->GetLastChild()  == -1) ? -1 : mom + 1 + p->GetLastChild();
+     int im  = mom + 1 + p->FirstMother();
+     int ifc = (p->FirstDaughter() == -1) ? -1 : mom + 1 + p->FirstDaughter();
+     int ilc = (p->LastDaughter()  == -1) ? -1 : mom + 1 + p->LastDaughter();
 
      evrec->AddParticle(pdgc, ist, im,-1, ifc, ilc, p4,vtx);
 

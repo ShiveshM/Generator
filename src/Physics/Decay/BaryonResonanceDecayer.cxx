@@ -19,17 +19,13 @@
 
 #include <TClonesArray.h>
 #include <TDecayChannel.h>
-#include <RVersion.h>
-#if ROOT_VERSION_CODE >= ROOT_VERSION(5,15,6)
-#include <TMCParticle.h>
-#else
-#include <TMCParticle6.h>
-#endif
 #include <TMath.h>
 
 #include "Framework/ParticleData/BaryonResUtils.h"
 #include "Framework/Conventions/Controls.h"
 #include "Physics/Decay/BaryonResonanceDecayer.h"
+#include "Framework/GHEP/GHepStatus.h"
+#include "Framework/GHEP/GHepParticle.h"
 #include "Framework/Messenger/Messenger.h"
 #include "Framework/ParticleData/PDGLibrary.h"
 #include "Framework/Numerical/RandomGen.h"
@@ -334,9 +330,9 @@ TClonesArray * BaryonResonanceDecayer::DecayExclusive(
 
 
   //-- Create the event record
-  //TClonesArray * particle_list = new TClonesArray("TMCParticle", 1+nd);
+  //TClonesArray * particle_list = new TClonesArray("genie::GHepParticle", 1+nd);
   TClonesArray * particle_list = 0;
-  TClonesArray * temp_particle_list = new TClonesArray("TMCParticle", 1+nd);//A temprary record.
+  TClonesArray * temp_particle_list = new TClonesArray("genie::GHepParticle", 1+nd);//A temprary record.
 
 
 while(1){  //start a loop until break;
@@ -385,8 +381,8 @@ while(1){  //start a loop until break;
   }
 
 //  //-- Create the event record
-//  TClonesArray * particle_list = new TClonesArray("TMCParticle", 1+nd);
-//  TClonesArray * temp_particle_list = new TClonesArray("TMCParticle", 1+nd);//A temprary record.
+//  TClonesArray * particle_list = new TClonesArray("GHepParticle", 1+nd);
+//  TClonesArray * temp_particle_list = new TClonesArray("GHepParticle", 1+nd);//A temprary record.
 
 
   //-- Add the mother particle to the event record (KS=11 as in PYTHIA)
@@ -401,7 +397,7 @@ while(1){  //start a loop until break;
   if(twobody){vcheckdelta.SetPxPyPzE(px,py,pz,E);}  // restore mother particle's 4-momentum.
 
   new ( (*temp_particle_list)[0] )
-                    TMCParticle(11,pdg_code,0,0,0,px,py,pz,E,M,0,0,0,0,0); //restore mother particle to the temp_particle list.
+                    GHepParticle(pdg_code,kIStNucleonTarget,0,0,0,0,px,py,pz,E,0,0,0,0); //restore mother particle to the temp_particle list.
 
   //-- Add the daughter particles to the event record
   for(unsigned int id = 0; id < nd; id++) {
@@ -435,7 +431,7 @@ while(1){  //start a loop until break;
 	   }  //end twobody
 
        new ( (*temp_particle_list)[1+id] )
-                         TMCParticle(1,pdgc[id],0,0,0,px,py,pz,E,M,0,0,0,0,0);
+                         GHepParticle(pdgc[id],kIStStableFinalState,0,0,0,0,px,py,pz,E,0,0,0,0);
   }//end daughter particle loop
 
   if(!twobody) break;

@@ -19,8 +19,7 @@
 #ifndef _GLASHOW_RESONANCE_GENERATOR_H_
 #define _GLASHOW_RESONANCE_GENERATOR_H_
 
-#include <TPythia6.h>
-
+#include "Physics/Hadronization/PythiaSingleton.h"
 #include "Framework/EventGen/EventRecordVisitorI.h"
 
 namespace genie {
@@ -44,7 +43,7 @@ private:
 
   void LoadConfig(void);
 
-  mutable TPythia6 * fPythia;   ///< PYTHIA6 wrapper class
+  mutable PythiaSingleton * fPythia8;   ///< PYTHIA8 wrapper class
 };
 
 }      // genie namespace

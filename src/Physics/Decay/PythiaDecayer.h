@@ -21,9 +21,8 @@
 #ifndef _PYTHIA_DECAYER_I_H_
 #define _PYTHIA_DECAYER_I_H_
 
-#include <TPythia6.h>
-
 #include "Physics/Decay/DecayModelI.h"
+#include "Physics/Hadronization/PythiaSingleton.h"
 
 namespace genie {
 
@@ -40,8 +39,8 @@ public:
   void           Initialize     (void)                          const;
   TClonesArray * Decay          (const DecayerInputs_t & inp)   const;
   double         Weight         (void)                          const;
-  void           InhibitDecay   (int pdg, TDecayChannel * dc=0) const;
-  void           UnInhibitDecay (int pdg, TDecayChannel * dc=0) const;
+  void           InhibitDecay   (int pdgc, TDecayChannel * dc=0) const;
+  void           UnInhibitDecay (int pdgc, TDecayChannel * dc=0) const;
 
   // overload the Algorithm::Configure() methods to load private data
   // members from configuration options
@@ -51,11 +50,11 @@ public:
 private:
 
   void   LoadConfig             (void);
-  double SumBR                  (int kc) const;
-  int    FindPythiaDecayChannel (int kc, TDecayChannel* dc) const;
-  bool   MatchDecayChannels     (int ichannel, TDecayChannel * dc) const;
+  double SumBR                  (int pdgc) const;
+  int    FindPythiaDecayChannel (int pdgc, TDecayChannel* dc) const;
+  bool   MatchDecayChannels     (int pdgc, int ichannel, TDecayChannel * dc) const;
 
-  mutable TPythia6 * fPythia;  ///< PYTHIA6 wrapper class
+  mutable PythiaSingleton * fPythia8;  ///< PYTHIA8 wrapper class
   mutable double fWeight;
 //bool fForceDecay;
 };

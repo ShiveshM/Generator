@@ -37,12 +37,6 @@
 #include <algorithm>
 #include <sstream>
 
-#include <RVersion.h>
-#if ROOT_VERSION_CODE >= ROOT_VERSION(5,15,6)
-#include <TMCParticle.h>
-#else
-#include <TMCParticle6.h>
-#endif
 #include <TParticlePDG.h>
 
 #include "Framework/Algorithm/AlgConfigPool.h"
@@ -231,25 +225,25 @@ void UnstableParticleDecayer::CopyToEventRecord(
   LOG("ParticleDecayer", pINFO) << "Copying decay to event record...";
 
   int new_mother_pos = mother_pos;
-  TMCParticle * dpmc =  0;
+  GHepParticle * dpmc =  0;
 
   TLorentzVector parent_x4 = *(p->X4());
 
   TObjArrayIter decay_iter(decay_products);
 
-  while( (dpmc = (TMCParticle *) decay_iter.Next()) ) {
+  while( (dpmc = (GHepParticle *) decay_iter.Next()) ) {
 
-     int pdg = dpmc->GetKF();
-     GHepStatus_t ist = GHepStatus_t (dpmc->GetKS()); 
+     int pdg = dpmc->Pdg();
+     GHepStatus_t ist = GHepStatus_t (dpmc->Status()); 
 
-     TLorentzVector p4(dpmc->GetPx(), 
-                       dpmc->GetPy(), 
-                       dpmc->GetPz(), 
-                       dpmc->GetEnergy()); 
-     TLorentzVector x4(dpmc->GetVx() / units::fm, 
-                       dpmc->GetVy() / units::fm, 
-                       dpmc->GetVz() / units::fm, 
-                       0); 
+     TLorentzVector p4(dpmc->Px(),
+                       dpmc->Py(),
+                       dpmc->Pz(),
+                       dpmc->Energy());
+     TLorentzVector x4(dpmc->Vx() / units::fm,
+                       dpmc->Vy() / units::fm,
+                       dpmc->Vz() / units::fm,
+                       0);
      x4 += parent_x4;
 
      //-- and now add the decay products

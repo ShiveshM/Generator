@@ -20,9 +20,8 @@
 #ifndef _PYTHIA_HADRONIZATION_H_
 #define _PYTHIA_HADRONIZATION_H_
 
-#include <TPythia6.h>
-
 #include "Physics/Hadronization/HadronizationModelBase.h"
+#include "Physics/Hadronization/PythiaSingleton.h"
 
 namespace genie {
 
@@ -54,7 +53,7 @@ private:
   void SwitchDecays   (int pdgc, bool on_off) const;
   void HandleDecays   (TClonesArray * plist) const;
 */
-  mutable TPythia6 * fPythia;   ///< PYTHIA6 wrapper class
+  mutable PythiaSingleton * fPythia8;   ///< PYTHIA8 wrapper class
 
   const DecayModelI * fDecayer;
 

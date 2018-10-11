@@ -12,12 +12,6 @@
 */
 //____________________________________________________________________________
 
-#include <RVersion.h>
-#if ROOT_VERSION_CODE >= ROOT_VERSION(5,15,6)
-#include <TMCParticle.h>
-#else
-#include <TMCParticle6.h>
-#endif
 #include <TClonesArray.h>
 #include <TMath.h>
 #include <TH1D.h>
@@ -27,6 +21,8 @@
 #include "Framework/Conventions/GBuild.h"
 #include "Physics/Decay/DecayModelI.h"
 #include "Physics/Hadronization/PythiaHadronization.h"
+#include "Framework/GHEP/GHepStatus.h"
+#include "Framework/GHEP/GHepParticle.h"
 #include "Framework/Interaction/Interaction.h"
 #include "Framework/Messenger/Messenger.h"
 #include "Framework/Numerical/RandomGen.h"
@@ -38,9 +34,6 @@
 
 using namespace genie;
 using namespace genie::constants;
-
-// the actual PYTHIA call
-extern "C" void py2ent_(int *,  int *, int *, double *);
 
 //____________________________________________________________________________
 PythiaHadronization::PythiaHadronization() :
@@ -62,10 +55,13 @@ PythiaHadronization::~PythiaHadronization()
 //____________________________________________________________________________
 void PythiaHadronization::Initialize(void) const
 {
-  fPythia = TPythia6::Instance();
+  fPythia8 = PythiaSingleton::Instance();
+  fPythia8->Pythia8()->readString("ProcessLevel:all = off");
+  fPythia8->Pythia8()->readString("Print:quiet      = on");
 
-  // sync GENIE/PYTHIA6 seed number
+  // sync GENIE/PYTHIA8 seed number
   RandomGen::Instance();
+  fPythia8->Pythia8()->init();
 }
 //____________________________________________________________________________
 TClonesArray * 
@@ -223,19 +219,18 @@ TClonesArray *
   LOG("PythiaHad", pNOTICE)
         << "Fragmentation / Init System: "
         << "q = " << final_quark << ", qq = " << diquark;
-  int ip = 0;
 
   // Determine how jetset treats un-stable particles appearing in hadronization
 
-  int pi0_decflag = fPythia->GetMDCY(fPythia->Pycomp(kPdgPi0),              1); 
-  int K0_decflag  = fPythia->GetMDCY(fPythia->Pycomp(kPdgK0),               1); 
-  int K0b_decflag = fPythia->GetMDCY(fPythia->Pycomp(kPdgAntiK0),           1); 
-  int L0_decflag  = fPythia->GetMDCY(fPythia->Pycomp(kPdgLambda),           1); 
-  int L0b_decflag = fPythia->GetMDCY(fPythia->Pycomp(kPdgAntiLambda),       1);
-  int Dm_decflag  = fPythia->GetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaM),  1); 
-  int D0_decflag  = fPythia->GetMDCY(fPythia->Pycomp(kPdgP33m1232_Delta0),  1); 
-  int Dp_decflag  = fPythia->GetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaP),  1); 
-  int Dpp_decflag = fPythia->GetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaPP), 1); 
+  bool pi0_decflag = fPythia8->Pythia8()->particleData.canDecay(kPdgPi0);
+  bool K0_decflag  = fPythia8->Pythia8()->particleData.canDecay(kPdgK0);
+  bool K0b_decflag = fPythia8->Pythia8()->particleData.canDecay(kPdgAntiK0);
+  bool L0_decflag  = fPythia8->Pythia8()->particleData.canDecay(kPdgLambda);
+  bool L0b_decflag = fPythia8->Pythia8()->particleData.canDecay(kPdgAntiLambda);
+  bool Dm_decflag  = fPythia8->Pythia8()->particleData.canDecay(kPdgP33m1232_DeltaM);
+  bool D0_decflag  = fPythia8->Pythia8()->particleData.canDecay(kPdgP33m1232_Delta0);
+  bool Dp_decflag  = fPythia8->Pythia8()->particleData.canDecay(kPdgP33m1232_DeltaP);
+  bool Dpp_decflag = fPythia8->Pythia8()->particleData.canDecay(kPdgP33m1232_DeltaPP);
 
 #ifdef __GENIE_LOW_LEVEL_MESG_ENABLED__
   LOG("PythiaHad", pDEBUG) << "Original decay flag for pi0           =  " << pi0_decflag;
@@ -249,70 +244,100 @@ TClonesArray *
   LOG("PythiaHad", pDEBUG) << "Original decay flag for D++           =  " << Dpp_decflag;
 #endif
 
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgPi0),               1,0); // don't decay pi0
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgK0),                1,0); // don't decay K0
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgAntiK0),            1,0); // don't decay \bar{K0}
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgLambda),            1,0); // don't decay Lambda0
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgAntiLambda),        1,0); // don't decay \bar{Lambda0}
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaM),   1,1); // decay Delta-
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_Delta0),   1,1); // decay Delta0
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaP),   1,1); // decay Delta+
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaPP),  1,1); // decay Delta++
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgPi0,              false ); // don't decay pi0
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgK0,               false ); // don't decay K0
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgAntiK0,           false ); // don't decay \bar{K0}
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgLambda,           false ); // don't decay Lambda0
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgAntiLambda,       false ); // don't decay \bar{Lambda0}
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaM,  true  ); // decay Delta-
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_Delta0,  true  ); // decay Delta0
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaP,  true  ); // decay Delta+
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaPP, true  ); // decay Delta++
 
   // -- hadronize --
-  py2ent_(&ip, &final_quark, &diquark, &W); // hadronizer
+  double mA    = fPythia8->Pythia8()->particleData.m0(final_quark);
+  double mB    = fPythia8->Pythia8()->particleData.m0(diquark);
+  double pzAcm = 0.5 * Pythia8::sqrtpos( (W + mA + mB) * (W - mA - mB) * (W - mA + mB) * (W + mA - mB) ) / W;
+  double pzBcm = -pzAcm;
+  double eA    = sqrt(mA*mA + pzAcm*pzAcm);
+  double eB    = sqrt(mB*mB + pzBcm*pzBcm);
+
+  fPythia8->Pythia8()->event.reset();
+
+  // Pythia8 status code for outgoing particles of the hardest subprocesses is 23
+  // anti/colour tags for these 2 particles must complement each other
+  fPythia8->Pythia8()->event.append(final_quark, 23, 101, 0, 0., 0., pzAcm, eA, mA);
+  fPythia8->Pythia8()->event.append(diquark    , 23, 0, 101, 0., 0., pzBcm, eB, mB);
+  fPythia8->Pythia8()->next();
+
+  // List the event information
+  fPythia8->Pythia8()->event.list();
+  fPythia8->Pythia8()->stat();
 
   // restore pythia decay settings so as not to interfere with decayer 
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgPi0),              1, pi0_decflag);
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgK0),               1, K0_decflag);
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgAntiK0),           1, K0b_decflag);
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgLambda),           1, L0_decflag); 
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgAntiLambda),       1, L0b_decflag); 
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaM),  1, Dm_decflag); 
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_Delta0),  1, D0_decflag); 
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaP),  1, Dp_decflag); 
-  fPythia->SetMDCY(fPythia->Pycomp(kPdgP33m1232_DeltaPP), 1, Dpp_decflag); 
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgPi0,             pi0_decflag);
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgK0,              K0_decflag);
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgAntiK0,          K0b_decflag);
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgLambda,          L0_decflag);
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgAntiLambda,      L0b_decflag);
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaM, Dm_decflag);
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_Delta0, D0_decflag);
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaP, Dp_decflag);
+  fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaPP,Dpp_decflag);
 
-  // get LUJETS record
-  fPythia->GetPrimaries();
-  TClonesArray * pythia_particles =
-       (TClonesArray *) fPythia->ImportParticles("All");
+  // get record
+  Pythia8::Event &fEvent = fPythia8->Pythia8()->event;
+  int numpart = fEvent.size();
+  assert(numpart>0);
 
-  // copy PYTHIA container to a new TClonesArray so as to transfer ownership
-  // of the container and of its elements to the calling method
+  // Offset the initial (system) particle
+  int ioff = 0;
+  if (fEvent[0].id() == 90) ioff = -1;
 
-  int np = pythia_particles->GetEntries();
-  assert(np>0);
-  TClonesArray * particle_list = new TClonesArray("TMCParticle", np);
+  TClonesArray * particle_list = new TClonesArray("genie::GHepParticle", numpart);
   particle_list->SetOwner(true);
 
-  unsigned int i = 0;
-  TMCParticle * particle = 0;
-  TIter particle_iter(pythia_particles);
+  for (int i = 1; i < numpart; ++i) {
+    /*
+     * Convert Pythia8 status code to Pythia6
+     * Initial quark has a pythia6 status code of 12
+     * The initial diquark and the fragmented particles have a pythia6 code of 11 (kIStNucleonTarget)
+     * Final state particles have a positive pythia8 code and a pythia6 code of 1 (kIStStableFinalState)
+     */
+    GHepStatus_t gStatus;
+    if (i == 1) gStatus = kIStDISPreFragmHadronicState;
+    else gStatus = (fEvent[i].status()>0) ? kIStStableFinalState : kIStNucleonTarget;
 
-  while( (particle = (TMCParticle *) particle_iter.Next()) ) {
-     LOG("PythiaHad", pDEBUG)
-          << "Adding final state particle pdgc = " << particle->GetKF() 
-          << " with status = " << particle->GetKS();
+    LOG("PythiaHad", pDEBUG)
+        << "Adding final state particle pdgc = " << fEvent[i].id()
+        << " with status = " << gStatus;
 
-     if(particle->GetKS() == 1) {
-        if( pdg::IsQuark  (particle->GetKF()) || 
-            pdg::IsDiQuark(particle->GetKF()) ) {
-                LOG("PythiaHad", pERROR)
-                  << "Hadronization failed! Bare quark/di-quarks appear in final state!";
-            particle_list->Delete();
-            delete particle_list;
-            return 0;            
-        }
-     }
+    if (fEvent[i].status() > 0){
+      if( pdg::IsQuark  (fEvent[i].id()) || 
+              pdg::IsDiQuark(fEvent[i].id()) ) {
+        LOG("PythiaHad", pERROR)
+            << "Hadronization failed! Bare quark/di-quarks appear in final state!";
+        particle_list->Delete();
+        delete particle_list;
+        return 0;            
+      }
+    }
 
-     // fix numbering scheme used for mother/daughter assignments
-     particle->SetParent     (particle->GetParent()     - 1);
-     particle->SetFirstChild (particle->GetFirstChild() - 1);
-     particle->SetLastChild  (particle->GetLastChild()  - 1);
-
-     // insert the particle in the list
-     new ( (*particle_list)[i++] ) TMCParticle(*particle);
+    new((*particle_list)[i]) GHepParticle(
+            fEvent[i].id(),
+            gStatus,
+            fEvent[i].mother1()   + ioff,
+            fEvent[i].mother2()   + ioff,
+            fEvent[i].daughter1() + ioff,
+            fEvent[i].daughter2() + ioff,
+            fEvent[i].px(),       // [GeV/c]
+            fEvent[i].py(),       // [GeV/c]
+            fEvent[i].pz(),       // [GeV/c]
+            fEvent[i].e(),        // [GeV]
+            fEvent[i].xProd(),    // [mm]
+            fEvent[i].yProd(),    // [mm]
+            fEvent[i].zProd(),    // [mm]
+            fEvent[i].tProd());   // [mm/c]
   }
 
   utils::fragmrec::Print(particle_list);
@@ -336,12 +361,12 @@ PDGCodeList *
   PDGCodeList * pdgcv = new PDGCodeList(allowdup);
   pdgcv->reserve(particle_list->GetEntries());
 
-  TMCParticle * particle = 0;
+  GHepParticle * particle = 0;
   TIter particle_iter(particle_list);
 
-  while ((particle = (TMCParticle *) particle_iter.Next())) 
+  while ((particle = (GHepParticle *) particle_iter.Next())) 
   {
-    if (particle->GetKS()==1) pdgcv->push_back(particle->GetKF());
+    if (particle->Status()==kIStStableFinalState) pdgcv->push_back(particle->Pdg());
   }
   particle_list->Delete();
   delete particle_list;
@@ -363,7 +388,7 @@ TH1D * PythiaHadronization::MultiplicityProb(
   TH1D * mult_prob = this->CreateMultProbHist(maxmult);
 
   const int nev=500;
-  TMCParticle * particle = 0;
+  GHepParticle * particle = 0;
 
   for(int iev=0; iev<nev; iev++) {
 
@@ -374,9 +399,9 @@ TH1D * PythiaHadronization::MultiplicityProb(
 
      int n = 0;
      TIter particle_iter(particle_list);
-     while ((particle = (TMCParticle *) particle_iter.Next())) 
+     while ((particle = (GHepParticle *) particle_iter.Next())) 
      {
-       if (particle->GetKS()==1) n++;
+       if (particle->Status()==kIStStableFinalState) n++;
      }   
      particle_list->Delete();
      delete particle_list;
@@ -441,13 +466,14 @@ void PythiaHadronization::LoadConfig(void)
 
    GetParam( "PYTHIA-SSBarSuppression", fSSBarSuppression ) ;
   GetParam( "PYTHIA-GaussianPt2",      fGaussianPt2      ) ;
-  GetParam( "PYTHIA-NonGaussianPt2Tail", fNonGaussianPt2Tail  ) ;
+  // TODO: find PYTHIA8 equivalent of this parameter
+  // GetParam( "PYTHIA-NonGaussianPt2Tail", fNonGaussianPt2Tail  ) ;
   GetParam( "PYTHIA-RemainingEnergyCutoff", fRemainingECutoff ) ;
 
-  fPythia->SetPARJ(2,  fSSBarSuppression);
-  fPythia->SetPARJ(21, fGaussianPt2);
-  fPythia->SetPARJ(23, fNonGaussianPt2Tail);
-  fPythia->SetPARJ(33, fRemainingECutoff);
+  // fPythia->SetPARJ(23, fNonGaussianPt2Tail);
+  fPythia8->Pythia8()->settings.parm("StringFlav:probStoUD", fSSBarSuppression);
+  fPythia8->Pythia8()->settings.parm("Diffraction:primKTwidth", fGaussianPt2);
+  fPythia8->Pythia8()->settings.parm("StringFragmentation:stopMass", fRemainingECutoff);
 
   // Load Wcut determining the phase space area where the multiplicity prob.
   // scaling factors would be applied -if requested-
@@ -611,13 +637,13 @@ void PythiaHadronization::HandleDecays(TClonesArray * plist) const
 
   //-- loop through the fragmentation event record & decay unstables
   int idecaying   = -1; // position of decaying particle
-  TMCParticle * p =  0; // current particle
+  GHepParticle * p =  0; // current particle
 
   TIter piter(plist);
-  while ( (p = (TMCParticle *) piter.Next()) ) {
+  while ( (p = (GHepParticle *) piter.Next()) ) {
      idecaying++;
-     int status = p->GetKS();
-     int pdg    = p->GetKF();
+     GHepStatus_t status = p->Status();
+     int pdg    = p->Pdg();
 
      bool decay_it = (status<10) && 
                      ( pdg == kPdgLambda ||
@@ -639,35 +665,35 @@ void PythiaHadronization::HandleDecays(TClonesArray * plist) const
      if(decay_it) {
 
           LOG("PythiaHad", pINFO)
-                     << "Decaying particle with pdgc = " << p->GetKF();
+                     << "Decaying particle with pdgc = " << p->Pdg();
 
           DecayerInputs_t dinp;
 
           TLorentzVector p4;
-          p4.SetPxPyPzE(p->GetPx(), p->GetPy(), p->GetPz(), p->GetEnergy());
+          p4.SetPxPyPzE(p->Px(), p->Py(), p->Pz(), p->Energy());
 
-          dinp.PdgCode = p->GetKF();
+          dinp.PdgCode = p->Pdg();
           dinp.P4      = &p4;
 
           TClonesArray * decay_products = fDecayer->Decay(dinp);
           if(decay_products) {
                   //--  mark the parent particle as decayed & set daughters
-                  p->SetKS(11);
+                  p->SetStatus(kIStNucleonTarget);
 
                   int nfp = plist->GetEntries();          // n. fragm. products
                   int ndp = decay_products->GetEntries(); // n. decay products
 
-                  p->SetFirstChild ( nfp );          // decay products added at
-                  p->SetLastChild  ( nfp + ndp -1 ); // the end of the fragm.rec.
+                  p->SetFirstDaughter ( nfp );          // decay products added at
+                  p->SetLastDaughter  ( nfp + ndp -1 ); // the end of the fragm.rec.
 
                   //--  add decay products to the fragmentation record
-                  TMCParticle * dp = 0;
+                  GHepParticle * dp = 0;
                   TIter dpiter(decay_products);
 
-                  while ( (dp = (TMCParticle *) dpiter.Next()) ) {
-                    if(dp->GetKS()>10) continue;
-                    dp->SetParent(idecaying);
-                    new ( (*plist)[plist->GetEntries()] ) TMCParticle(*dp);
+                  while ( (dp = (GHepParticle *) dpiter.Next()) ) {
+                    if(dp->Status()>10) continue;
+                    dp->SetFirstMother(idecaying);
+                    new ( (*plist)[plist->GetEntries()] ) GHepParticle(*dp);
                   }
 
                   //-- clean up decay products
