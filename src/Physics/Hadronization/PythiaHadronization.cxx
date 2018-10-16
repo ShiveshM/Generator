@@ -220,6 +220,20 @@ TClonesArray *
         << "Fragmentation / Init System: "
         << "q = " << final_quark << ", qq = " << diquark;
 
+  int incoming_neutrino_pdg = init_state.ProbePdg();
+  int incoming_parton_pdg   = target.HitQrkPdg();
+  int outgoing_lepton_pdg   = interaction->FSPrimLeptonPdg();
+  int outgoing_quark_pdg    = final_quark;
+  int outgoing_diquark_pdg  = diquark;
+
+  RefFrame_t rf = kRfLab; // LAB frame
+  double incoming_parton_m0 = fPythia8->Pythia8()->particleData.m0(incoming_parton_pdg);
+
+  TLorentzVector incoming_neutrino_momentum = *init_state.GetProbeP4(rf);
+  TLorentzVector incoming_parton_momentum   = TLorentzVector(0., 0., 0., incoming_parton_m0);
+  TLorentzVector outgoing_lepton_momentum   = kinematics.FSLeptonP4();
+  TLorentzVector outgoing_parton_momentum   = kinematics.HadSystP4();
+
   // Determine how jetset treats un-stable particles appearing in hadronization
 
   bool pi0_decflag = fPythia8->Pythia8()->particleData.canDecay(kPdgPi0);
