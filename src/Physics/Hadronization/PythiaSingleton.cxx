@@ -25,6 +25,7 @@ PythiaSingleton::PythiaSingleton()
     }
 
     fPythia = new Pythia8::Pythia();
+    fEventReader = new Pythia8::LHAup_Genie();
 }
 //____________________________________________________________________________
 PythiaSingleton::~PythiaSingleton()
@@ -36,6 +37,7 @@ PythiaSingleton::~PythiaSingleton()
         fgInstance = 0;
     }
     delete fPythia;
+    delete fEventReader;
 }
 //____________________________________________________________________________
 PythiaSingleton* PythiaSingleton::Instance() 

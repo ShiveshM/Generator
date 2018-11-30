@@ -56,11 +56,24 @@ PythiaHadronization::~PythiaHadronization()
 void PythiaHadronization::Initialize(void) const
 {
   fPythia8 = PythiaSingleton::Instance();
-  fPythia8->Pythia8()->readString("ProcessLevel:all = off");
-  fPythia8->Pythia8()->readString("Print:quiet      = on");
+
+  // Set up Pythia to read hard scattering from external provider (via
+  // the Les Houches Event Accord functionalities)
+  fPythia8->Pythia8()->readString("Beams:frameType = 5");
+  fPythia8->Pythia8()->readString("Print:quiet     = on");
+
+  // set up a global instance of LHAup
+  fPythia8->EventReader()->setPointers(&fPythia8->Pythia8()->settings);
+  // TODO(shivesh): how to get incoming nu and hit nucleon information?
+  fPythia8->EventReader()->fillInit(12, 2212, 100.0, 1.0);
+  fPythia8->EventReader()->setInit();
+  fPythia8->Pythia8()->setLHAupPtr(fPythia8->EventReader());
 
   // sync GENIE/PYTHIA8 seed number
   RandomGen::Instance();
+  // Initialize Pythia.
+  fPythia8->Pythia8()->readString("Main:numberOfEvents = 1");
+  fPythia8->Pythia8()->readString("Check:beams = off");
   fPythia8->Pythia8()->init();
 }
 //____________________________________________________________________________
@@ -141,84 +154,84 @@ TClonesArray *
     }
   }//CC
 
-  // Figure out what the remnant diquark is.
-  // Note from Hugh, following a conversation with his local HEP theorist 
-  // (Gary Goldstein): "I am told that the probability of finding the diquark 
-  // in the singlet vs. triplet states is 50-50."  
-
-  // hit quark = valence quark
-  if(!from_sea) {
-    if (isp && isu) diquark = kPdgUDDiquarkS1; /* u(->q) + ud */
-    if (isp && isd) diquark = kPdgUUDiquarkS1; /* d(->q) + uu */
-    if (isn && isu) diquark = kPdgDDDiquarkS1; /* u(->q) + dd */
-    if (isn && isd) diquark = kPdgUDDiquarkS1; /* d(->q) + ud */
-  }
-  // hit quark = sea quark
-  else {
-    if(isp && isu) diquark = kPdgUDDiquarkS1; /* u(->q) + bar{u} uud (=ud) */
-    if(isp && isd) diquark = kPdgUUDiquarkS1; /* d(->q) + bar{d} uud (=uu) */
-    if(isn && isu) diquark = kPdgDDDiquarkS1; /* u(->q) + bar{u} udd (=dd) */
-    if(isn && isd) diquark = kPdgUDDiquarkS1; /* d(->q) + bar{d} udd (=ud) */
-
-    // The following section needs revisiting.
-
-    // The lepton is scattered off a sea antiquark, materializing its quark
-    // partner and leaving me with a 5q system ( <qbar + q> + qqq(valence) )
-    // I will force few qbar+q annhilations below to get my quark/diquark system
-    // Probably it is best to leave the qqq system in the final state and then
-    // just do the fragmentation of the qbar q system? But how do I figure out
-    // how to split the available energy?
-
-    /* bar{u} (-> bar{d}) + u uud => u + uu */
-    if(isp && isub && iscc)         {final_quark = kPdgUQuark; diquark = kPdgUUDiquarkS1;}
-    /* bar{u} (-> bar{u}) + u uud => u + ud */
-    if(isp && isub && (isnc||isem||isdm)) {final_quark = kPdgUQuark; diquark = kPdgUDDiquarkS1;}
-    /* bar{d} (-> bar{u}) + d uud => d + ud */
-    if(isp && isdb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;}
-    /* bar{d} (-> bar{d}) + d uud => d + uu */
-    if(isp && isdb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUUDiquarkS1;}
-    /* bar{u} (-> bar{d}) + u udd => u + ud */
-    if(isn && isub && iscc)         {final_quark = kPdgUQuark; diquark = kPdgUDDiquarkS1;}
-    /* bar{u} (-> bar{u}) + u udd => u + dd */
-    if(isn && isub && (isnc||isem||isdm)) {final_quark = kPdgUQuark; diquark = kPdgDDDiquarkS1;}
-    /* bar{d} (-> bar{u}) + d udd => d + dd */
-    if(isn && isdb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgDDDiquarkS1;}
-    /* bar{d} (-> bar{d}) + d udd => d + ud */
-    if(isn && isdb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;}
-
-    // The neutrino is scatterred off s or sbar sea quarks 
-    // For the time being I will handle s like d and sbar like dbar (copy & paste
-    // from above) so that I conserve charge. 
-
-    if(iss || issb) {
-       LOG("PythiaHad", pNOTICE) 
-                 << "Can not really handle a hit s or sbar quark / Faking it";
-
-       if(isp && iss) { diquark = kPdgUUDiquarkS1; }
-       if(isn && iss) { diquark = kPdgUDDiquarkS1; }
-
-       if(isp && issb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;}
-       if(isp && issb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUUDiquarkS1;}
-       if(isn && issb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgDDDiquarkS1;}
-       if(isn && issb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;}
-    }
- 
-    // if the diquark is a ud, switch it to the singlet state with 50% probability
-    if(diquark == kPdgUDDiquarkS1) {
-      RandomGen * rnd = RandomGen::Instance();
-      double Rqq = rnd->RndHadro().Rndm();
-      if(Rqq<0.5) diquark = kPdgUDDiquarkS0;
-    }
-  }
-  assert(diquark!=0);
+  /* // Figure out what the remnant diquark is. */
+  /* // Note from Hugh, following a conversation with his local HEP theorist  */
+  /* // (Gary Goldstein): "I am told that the probability of finding the diquark  */
+  /* // in the singlet vs. triplet states is 50-50."   */
+  /*  */
+  /* // hit quark = valence quark */
+  /* if(!from_sea) { */
+  /*   if (isp && isu) diquark = kPdgUDDiquarkS1; #<{(| u(->q) + ud |)}># */
+  /*   if (isp && isd) diquark = kPdgUUDiquarkS1; #<{(| d(->q) + uu |)}># */
+  /*   if (isn && isu) diquark = kPdgDDDiquarkS1; #<{(| u(->q) + dd |)}># */
+  /*   if (isn && isd) diquark = kPdgUDDiquarkS1; #<{(| d(->q) + ud |)}># */
+  /* } */
+  /* // hit quark = sea quark */
+  /* else { */
+  /*   if(isp && isu) diquark = kPdgUDDiquarkS1; #<{(| u(->q) + bar{u} uud (=ud) |)}># */
+  /*   if(isp && isd) diquark = kPdgUUDiquarkS1; #<{(| d(->q) + bar{d} uud (=uu) |)}># */
+  /*   if(isn && isu) diquark = kPdgDDDiquarkS1; #<{(| u(->q) + bar{u} udd (=dd) |)}># */
+  /*   if(isn && isd) diquark = kPdgUDDiquarkS1; #<{(| d(->q) + bar{d} udd (=ud) |)}># */
+  /*  */
+  /*   // The following section needs revisiting. */
+  /*  */
+  /*   // The lepton is scattered off a sea antiquark, materializing its quark */
+  /*   // partner and leaving me with a 5q system ( <qbar + q> + qqq(valence) ) */
+  /*   // I will force few qbar+q annhilations below to get my quark/diquark system */
+  /*   // Probably it is best to leave the qqq system in the final state and then */
+  /*   // just do the fragmentation of the qbar q system? But how do I figure out */
+  /*   // how to split the available energy? */
+  /*  */
+  /*   #<{(| bar{u} (-> bar{d}) + u uud => u + uu |)}># */
+  /*   if(isp && isub && iscc)         {final_quark = kPdgUQuark; diquark = kPdgUUDiquarkS1;} */
+  /*   #<{(| bar{u} (-> bar{u}) + u uud => u + ud |)}># */
+  /*   if(isp && isub && (isnc||isem||isdm)) {final_quark = kPdgUQuark; diquark = kPdgUDDiquarkS1;} */
+  /*   #<{(| bar{d} (-> bar{u}) + d uud => d + ud |)}># */
+  /*   if(isp && isdb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;} */
+  /*   #<{(| bar{d} (-> bar{d}) + d uud => d + uu |)}># */
+  /*   if(isp && isdb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUUDiquarkS1;} */
+  /*   #<{(| bar{u} (-> bar{d}) + u udd => u + ud |)}># */
+  /*   if(isn && isub && iscc)         {final_quark = kPdgUQuark; diquark = kPdgUDDiquarkS1;} */
+  /*   #<{(| bar{u} (-> bar{u}) + u udd => u + dd |)}># */
+  /*   if(isn && isub && (isnc||isem||isdm)) {final_quark = kPdgUQuark; diquark = kPdgDDDiquarkS1;} */
+  /*   #<{(| bar{d} (-> bar{u}) + d udd => d + dd |)}># */
+  /*   if(isn && isdb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgDDDiquarkS1;} */
+  /*   #<{(| bar{d} (-> bar{d}) + d udd => d + ud |)}># */
+  /*   if(isn && isdb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;} */
+  /*  */
+  /*   // The neutrino is scatterred off s or sbar sea quarks  */
+  /*   // For the time being I will handle s like d and sbar like dbar (copy & paste */
+  /*   // from above) so that I conserve charge.  */
+  /*  */
+  /*   if(iss || issb) { */
+  /*      LOG("PythiaHad", pNOTICE)  */
+  /*                << "Can not really handle a hit s or sbar quark / Faking it"; */
+  /*  */
+  /*      if(isp && iss) { diquark = kPdgUUDiquarkS1; } */
+  /*      if(isn && iss) { diquark = kPdgUDDiquarkS1; } */
+  /*  */
+  /*      if(isp && issb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;} */
+  /*      if(isp && issb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUUDiquarkS1;} */
+  /*      if(isn && issb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgDDDiquarkS1;} */
+  /*      if(isn && issb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;} */
+  /*   } */
+  /*  */
+  /*   // if the diquark is a ud, switch it to the singlet state with 50% probability */
+  /*   if(diquark == kPdgUDDiquarkS1) { */
+  /*     RandomGen * rnd = RandomGen::Instance(); */
+  /*     double Rqq = rnd->RndHadro().Rndm(); */
+  /*     if(Rqq<0.5) diquark = kPdgUDDiquarkS0; */
+  /*   } */
+  /* } */
+  /* assert(diquark!=0); */
 
   //
   // PYTHIA -> HADRONIZATION
   //
 
   LOG("PythiaHad", pNOTICE)
-        << "Fragmentation / Init System: "
-        << "q = " << final_quark << ", qq = " << diquark;
+        << "Fragmentation System: "
+        << "Hit q = " << hit_quark << ", Final q = " << final_quark;
 
   // Determine how jetset treats un-stable particles appearing in hadronization
 
@@ -255,19 +268,30 @@ TClonesArray *
   fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaPP, true  ); // decay Delta++
 
   // -- hadronize --
-  double mA    = fPythia8->Pythia8()->particleData.m0(final_quark);
-  double mB    = fPythia8->Pythia8()->particleData.m0(diquark);
-  double pzAcm = 0.5 * Pythia8::sqrtpos( (W + mA + mB) * (W - mA - mB) * (W - mA + mB) * (W + mA - mB) ) / W;
-  double pzBcm = -pzAcm;
-  double eA    = sqrt(mA*mA + pzAcm*pzAcm);
-  double eB    = sqrt(mB*mB + pzBcm*pzBcm);
+  // This should set the LHA event using fortran common blocks
+  eventreader.clearEvent();
+  eventreader.fillEventInfo(4, 1.0, 10.0);
 
-  fPythia8->Pythia8()->event.reset();
+  RefFrame_t rf = kRfLab; // LAB frame
+  TLorentzVector probe_p4       = *init_state.GetProbeP4(rf);
+  TLorentzVector out_lepton_p4  = kinematics.FSLeptonP4(rf);
+  TLorentzVector final_quark_p4 = kinematics.HadSystP4(rf);
+  TLorentzVector hit_quark_p4   = out_lepton_p + out_hadron_p - probe_p;
 
-  // Pythia8 status code for outgoing particles of the hardest subprocesses is 23
-  // anti/colour tags for these 2 particles must complement each other
-  fPythia8->Pythia8()->event.append(final_quark, 23, 101, 0, 0., 0., pzAcm, eA, mA);
-  fPythia8->Pythia8()->event.append(diquark    , 23, 0, 101, 0., 0., pzBcm, eB, mB);
+  // Incoming particles.
+  vector<double> p = {probe_p4.Px(), probe_p4.Py(), probe_p4.Pz(), probe_p4.E(), 0.}
+  fPythia8->EventReader()->fillNewParticle(probe, -1, p);
+  p = {hit_quark_p4.Px(), hit_quark_p4.Py(), hit_quark_p4.Pz(), hit_quark_p4.E(), 0.}
+  fPythia8->EventReader()->fillNewParticle(hit_quark, -1, p);
+
+  // Outgoing particles.
+  p = {out_lepton_p4.Px(), out_lepton_p4.Py(), out_lepton_p4.Pz(), out_lepton_p4.E(), 0.}
+  fPythia8->EventReader()->fillNewParticle(interaction->FSPrimLeptonPdg(), -1, p);
+  p = {final_quark_p4.Px(), final_quark_p4.Py(), final_quark_p4.Pz(), final_quark_p4.E(), 0.}
+  fPythia8->EventReader()->fillNewParticle(final_quark, -1, p);
+  fPythia8->EventReader().setEvent(); 
+
+  // Now call Pythia to process information.
   fPythia8->Pythia8()->next();
 
   // List the event information
