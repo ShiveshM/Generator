@@ -64,15 +64,24 @@ CharmHadronization::~CharmHadronization()
 
   delete fDsFracSpl;
   fDsFracSpl = 0;
+
+  fPythia8->Delete();
+  delete fPythia8;
+  fPythia8 = 0;
 }
 //____________________________________________________________________________
 void CharmHadronization::Initialize(void) const
 {
   fPythia8 = PythiaSingleton::Instance();
+  Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
+  pythia8->settings.resetAll();
 
-  fPythia8->Pythia8()->readString("ProcessLevel:all = off");
-  fPythia8->Pythia8()->readString("Print:quiet      = on");
-  fPythia8->Pythia8()->init();
+  // sync GENIE/PYTHIA8 seed number
+  RandomGen::Instance();
+
+  pythia8->readString("ProcessLevel:all = off");
+  pythia8->readString("Print:quiet      = on");
+  pythia8->init();
 }
 //____________________________________________________________________________
 TClonesArray * CharmHadronization::Hadronize(
@@ -86,6 +95,7 @@ TClonesArray * CharmHadronization::Hadronize(
   // ....................................................................
   // Get information on the input event
   //
+  Pythia8::Pythia *    pythia8    = fPythia8->Pythia8();
   const InitialState & init_state = interaction -> InitState();
   const Kinematics &   kinematics = interaction -> Kine();
   const Target &       target     = init_state.Tgt();
@@ -476,44 +486,53 @@ TClonesArray * CharmHadronization::Hadronize(
      //
      // Run PYTHIA for the hadronization of remnant system
      //
-     fPythia8->Pythia8()->particleData.mayDecay(kPdgPi0,              false); // don't decay pi0
-     fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaM,  true); // decay Delta+
-     fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_Delta0,  true); // decay Delta++
-     fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaP,  true); // decay Delta++
-     fPythia8->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaPP, true); // decay Delta++
-//   fPythia8->Pythia8()->particleData.mayDecay(kPdgDeltaP,  true); // decay Delta+
-//   fPythia8->Pythia8()->particleData.mayDecay(kPdgDeltaPP, true); // decay Delta++
-      // -- hadronize --
-      double mA    = fPythia8->Pythia8()->particleData.m0(qrkSyst1);
-     double mB    = fPythia8->Pythia8()->particleData.m0(qrkSyst2);
+     pythia8->particleData.mayDecay(kPdgPi0,              false); // don't decay pi0
+     pythia8->particleData.mayDecay(kPdgP33m1232_DeltaM,  true); // decay Delta+
+     pythia8->particleData.mayDecay(kPdgP33m1232_Delta0,  true); // decay Delta++
+     pythia8->particleData.mayDecay(kPdgP33m1232_DeltaP,  true); // decay Delta++
+     pythia8->particleData.mayDecay(kPdgP33m1232_DeltaPP, true); // decay Delta++
+//   pythia8->particleData.mayDecay(kPdgDeltaP,  true); // decay Delta+
+//   pythia8->particleData.mayDecay(kPdgDeltaPP, true); // decay Delta++
+
+     // -- hadronize --
+
+     double mA    = pythia8->particleData.m0(qrkSyst1);
+     double mB    = pythia8->particleData.m0(qrkSyst2);
      double pzAcm = 0.5 * Pythia8::sqrtpos( (WR + mA + mB) * (WR - mA - mB) * (WR - mA + mB) * (WR + mA - mB) ) / WR;
      double pzBcm = -pzAcm;
      double eA    = sqrt(mA*mA + pzAcm*pzAcm);
      double eB    = sqrt(mB*mB + pzBcm*pzBcm);
-      fPythia8->Pythia8()->event.reset();
-       // Pythia8 status code for outgoing particles of the hardest subprocesses is 23
-      // anti/colour tags for these 2 particles must complement each other
-      // antiparticles must have positive anticolour to avoid PYTHIA errors
+
+     pythia8->event.reset();
+
+     // Pythia8 status code for outgoing particles of the hardest subprocesses is 23
+     // anti/colour tags for these 2 particles must complement each other
+     // antiparticles must have positive anticolour to avoid PYTHIA errors
      if (qrkSyst1 > 0) {
-         fPythia8->Pythia8()->event.append(qrkSyst1, 23, 101, 0, 0., 0., pzAcm, eA, mA);
-         fPythia8->Pythia8()->event.append(qrkSyst2, 23, 0, 101, 0., 0., pzBcm, eB, mB);
+         pythia8->event.append(qrkSyst1, 23, 101, 0, 0., 0., pzAcm, eA, mA);
+         pythia8->event.append(qrkSyst2, 23, 0, 101, 0., 0., pzBcm, eB, mB);
      } else {
-         fPythia8->Pythia8()->event.append(qrkSyst1, 23, 0, 101, 0., 0., pzAcm, eA, mA);
-         fPythia8->Pythia8()->event.append(qrkSyst2, 23, 101, 0, 0., 0., pzBcm, eB, mB);
+         pythia8->event.append(qrkSyst1, 23, 0, 101, 0., 0., pzAcm, eA, mA);
+         pythia8->event.append(qrkSyst2, 23, 101, 0, 0., 0., pzBcm, eB, mB);
      }
-     fPythia8->Pythia8()->next();
-       // List the event information
-     fPythia8->Pythia8()->event.list();
-     fPythia8->Pythia8()->stat();
-      fPythia8->Pythia8()->particleData.mayDecay(kPdgPi0, true); // restore
-      //-- Get PYTHIA's event record
-     Pythia8::Event &fEvent = fPythia8->Pythia8()->event;
+     pythia8->next();
+
+     // List the event information
+     pythia8->event.list();
+     pythia8->stat();
+
+     pythia8->particleData.mayDecay(kPdgPi0, true); // restore
+
+     //-- Get PYTHIA's event record
+     Pythia8::Event &fEvent = pythia8->event;
      int numpart = fEvent.size();
      assert(numpart>0);
-      // Offset the initial (system) particle
+
+     // Offset the initial (system) particle
      int ioff = 0;
      if (fEvent[0].id() == 90) ioff = -1;
-      for (int i = 1; i < numpart; ++i) {
+
+     for (int i = 1; i < numpart; ++i) {
         /*
          * Convert Pythia8 status code to Pythia6
          * Initial quark has a pythia6 status code of 12

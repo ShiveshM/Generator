@@ -19,7 +19,7 @@
 #include <cstdlib>
 
 #include <TSystem.h>
-#include "Physics/Hadronization/PythiaSingleton.h"
+/* #include "Physics/Hadronization/PythiaSingleton.h" */
 
 #include "Framework/Conventions/Controls.h"
 #include "Framework/Messenger/Messenger.h"
@@ -113,9 +113,9 @@ void RandomGen::SetSeed(long int seed)
   gRandom ->SetSeed (seed);
 
   // Set the PYTHIA8 seed number
-  PythiaSingleton * pythia8 = PythiaSingleton::Instance();
-  pythia8->Pythia8()->readString("ProcessLevel:all = off");
-  pythia8->Pythia8()->readString("Print:quiet      = on");
+  // TODO(shivesh): sync the seeds when init is no longer being called for each
+  // event
+  /* PythiaSingleton * pythia8 = PythiaSingleton::Instance(); */
 
   LOG("Rndm", pINFO) << "RndKine  seed = " << this->RndKine ().GetSeed();
   LOG("Rndm", pINFO) << "RndHadro seed = " << this->RndHadro().GetSeed();
@@ -129,7 +129,7 @@ void RandomGen::SetSeed(long int seed)
   LOG("Rndm", pINFO) << "RndNum   seed = " << this->RndNum  ().GetSeed();
   LOG("Rndm", pINFO) << "RndGen   seed = " << this->RndGen  ().GetSeed();
   LOG("Rndm", pINFO) << "gRandom  seed = " << gRandom->GetSeed();
-  LOG("Rndm", pINFO) << "PYTHIA8  seed = " << pythia8->Pythia8()->settings.mode("Random:seed");
+  /* LOG("Rndm", pINFO) << "PYTHIA8  seed = " << pythia8->Pythia8()->settings.mode("Random:seed"); */
 }
 //____________________________________________________________________________
 void RandomGen::InitRandomGenerators(long int seed)

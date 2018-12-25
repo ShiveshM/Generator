@@ -61,7 +61,9 @@ DecayModelI("genie::PythiaDecayer", config)
 //____________________________________________________________________________
 PythiaDecayer::~PythiaDecayer() 
 { 
-
+  fPythia8->Delete();
+  delete fPythia8;
+  fPythia8 = 0;
 }
 //____________________________________________________________________________
 bool PythiaDecayer::IsHandled(int code) const
@@ -77,25 +79,31 @@ bool PythiaDecayer::IsHandled(int code) const
 //____________________________________________________________________________
 void PythiaDecayer::Initialize(void) const
 {
-  fPythia8 = PythiaSingleton::Instance();
   fWeight = 1.;
-  fPythia8->Pythia8()->readString("ProcessLevel:all = off");
-  fPythia8->Pythia8()->readString("Print:quiet      = on");
+
+  fPythia8 = PythiaSingleton::Instance();
+  Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
+  pythia8->settings.resetAll();
+
+  pythia8->readString("ProcessLevel:all = off");
+  pythia8->readString("Print:quiet      = on");
 
   // sync GENIE/PYTHIA8 seeds
   RandomGen::Instance();
-  fPythia8->Pythia8()->init();
+  pythia8->init();
 }
 //____________________________________________________________________________
 TClonesArray * PythiaDecayer::Decay(const DecayerInputs_t & inp) const
 {
   fWeight = 1.; // reset weight
 
+  Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
+
   int pdgc = inp.PdgCode;
 
   if ( ! this->IsHandled(pdgc) ) return 0;
   
-  bool md = fPythia8->Pythia8()->particleData.canDecay(pdgc);
+  bool md = pythia8->particleData.canDecay(pdgc);
   if(not md) {
     LOG("PythiaDec", pNOTICE)
        << (PDGLibrary::Instance())->Find(pdgc)->GetName() 
@@ -115,20 +123,20 @@ TClonesArray * PythiaDecayer::Decay(const DecayerInputs_t & inp) const
   fWeight = 1./sumbr; // update weight to account for inhibited channels
 
   double E  = inp.P4->Energy();
-  double M  = fPythia8->Pythia8()->particleData.m0(pdgc);
+  double M  = pythia8->particleData.m0(pdgc);
   double pz = Pythia8::sqrtpos(E*E - M*M);
 
-  fPythia8->Pythia8()->event.reset();
+  pythia8->event.reset();
 
-  fPythia8->Pythia8()->event.append(pdgc, 11, 0, 0, 0., 0., pz, E, M);
-  fPythia8->Pythia8()->next();
+  pythia8->event.append(pdgc, 11, 0, 0, 0., 0., pz, E, M);
+  pythia8->next();
 
   // List event information
-  fPythia8->Pythia8()->event.list();
-  fPythia8->Pythia8()->stat();
+  pythia8->event.list();
+  pythia8->stat();
 
   //-- get decay products
-  Pythia8::Event &fEvent = fPythia8->Pythia8()->event;
+  Pythia8::Event &fEvent = pythia8->event;
   int numpart = fEvent.size();
    int ioff = 0;
   if (fEvent[0].id() == 90) ioff = -1;
@@ -172,10 +180,12 @@ void PythiaDecayer::InhibitDecay(int pdgc, TDecayChannel * dc) const
 {
   if(! this->IsHandled(pdgc)) return; 
 
+  Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
+
   if(!dc) {
     LOG("PythiaDec", pINFO)
        << "Switching OFF ALL decay channels for particle = " << pdgc;
-    fPythia8->Pythia8()->particleData.mayDecay(pdgc, false);
+    pythia8->particleData.mayDecay(pdgc, false);
     return;
   }
 
@@ -185,7 +195,7 @@ void PythiaDecayer::InhibitDecay(int pdgc, TDecayChannel * dc) const
 
   int ichannel = this->FindPythiaDecayChannel(pdgc, dc);
   if(ichannel != -1) {
-    Pythia8::ParticleDataEntry * fPDE = fPythia8->Pythia8()->particleData.particleDataEntryPtr(pdgc);
+    Pythia8::ParticleDataEntry * fPDE = pythia8->particleData.particleDataEntryPtr(pdgc);
     fPDE->channel(ichannel).onMode(0); // switch-off
   }
 }
@@ -194,13 +204,14 @@ void PythiaDecayer::UnInhibitDecay(int pdgc, TDecayChannel * dc) const
 {
   if(! this->IsHandled(pdgc)) return; 
 
-  Pythia8::ParticleDataEntry * fPDE = fPythia8->Pythia8()->particleData.particleDataEntryPtr(pdgc);
+  Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
+  Pythia8::ParticleDataEntry * fPDE = pythia8->particleData.particleDataEntryPtr(pdgc);
 
   if(!dc) {
     LOG("PythiaDec", pINFO)
       << "Switching ON all PYTHIA decay channels for particle = " << pdgc;
 
-    fPythia8->Pythia8()->particleData.mayDecay(pdgc, true);
+    pythia8->particleData.mayDecay(pdgc, true);
 
     // loop over pythia decay channels
     int size_channels = fPDE->sizeChannels();
@@ -228,7 +239,8 @@ double PythiaDecayer::SumBR(int pdgc) const
 
   bool has_inhibited_channels=false;
 
-  Pythia8::ParticleDataEntry * fPDE = fPythia8->Pythia8()->particleData.particleDataEntryPtr(pdgc);
+  Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
+  Pythia8::ParticleDataEntry * fPDE = pythia8->particleData.particleDataEntryPtr(pdgc);
   int size_channels = fPDE->sizeChannels();
 
   // loop over pythia decay channels
@@ -261,7 +273,8 @@ int PythiaDecayer::FindPythiaDecayChannel(int pdgc, TDecayChannel* dc) const
 
   bool found_match = false;
 
-  Pythia8::ParticleDataEntry * fPDE = fPythia8->Pythia8()->particleData.particleDataEntryPtr(pdgc);
+  Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
+  Pythia8::ParticleDataEntry * fPDE = pythia8->particleData.particleDataEntryPtr(pdgc);
   int size_channels = fPDE->sizeChannels();
 
   // loop over pythia decay channels
@@ -293,7 +306,8 @@ bool PythiaDecayer::MatchDecayChannels(int pdgc, int ichannel, TDecayChannel* dc
   // num. of daughters in the input TDecayChannel & the input PYTHIA ichannel
   int nd = dc->NDaughters();
 
-  Pythia8::ParticleDataEntry * fPDE = fPythia8->Pythia8()->particleData.particleDataEntryPtr(pdgc);
+  Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
+  Pythia8::ParticleDataEntry * fPDE = pythia8->particleData.particleDataEntryPtr(pdgc);
 
   int py_nd = 0;
   for (int i = 0; i < 8; i++) {
