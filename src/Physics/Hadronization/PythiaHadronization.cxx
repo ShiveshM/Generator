@@ -64,7 +64,7 @@ void PythiaHadronization::Initialize(void) const
   // Set up Pythia to read hard scattering from external provider (via
   // the Les Houches Event Accord functionalities)
   pythia8->readString("Beams:frameType = 5");
-  pythia8->readString("Print:quiet     = on");
+  /* pythia8->readString("Print:quiet     = on"); */
   pythia8->readString("LesHouches:setLeptonMass = 2");
   pythia8->readString("LesHouches:setQuarkMass  = 2");
   pythia8->readString("LesHouches:matchInOut    = off");
@@ -243,7 +243,6 @@ TClonesArray *
   pythia8->readString("Main:numberOfEvents = 1");
   pythia8->readString("Check:beams = off");
   pythia8->init();
-  pythia8->event.list();
 
   // This should set the LHA event using fortran common blocks
   assert(eventReader->clearEvent());
@@ -278,7 +277,6 @@ TClonesArray *
   p[4] = finQrkV4.mCalc();
   assert(eventReader->fillNewParticle(final_quark, 1, p));
   assert(eventReader->setEvent()); 
-  pythia8->event.list();
 
   // Now call Pythia to process information.
   pythia8->next();
@@ -301,7 +299,13 @@ TClonesArray *
   // get record
   Pythia8::Event &fEvent = pythia8->event;
   int numpart = fEvent.size();
-  assert(numpart>0);
+  if (numpart == 0) {
+      std::cout << "probeV4 = " << probeV4 << std::endl;
+      std::cout << "hitQrkV4 = " << hitQrkV4 << std::endl;
+      std::cout << "outLepV4 = " << outLepV4 << std::endl;
+      std::cout << "finQrkV4 = " << finQrkV4 << std::endl;
+      assert(numpart>0);
+  }
 
   // Offset the initial particles.
   int ioff = -4;
