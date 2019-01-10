@@ -235,8 +235,8 @@ TClonesArray *
 
   // Setup beam.
   Pythia8::LHAup_Genie * eventReader = fPythia8->EventReader();
-  assert(eventReader->fillInit(probe, hit_nucleon, probeV4.e(), hitNucV4.e()));
-  assert(eventReader->setInit());
+  eventReader->fillInit(probe, hit_nucleon, probeV4.e(), hitNucV4.e());
+  eventReader->setInit();
   pythia8->setLHAupPtr(eventReader);
 
   // Initialize Pythia.
@@ -245,8 +245,8 @@ TClonesArray *
   pythia8->init();
 
   // This should set the LHA event using fortran common blocks
-  assert(eventReader->clearEvent());
-  assert(eventReader->fillEventInfo(4, 1.0, 10.0));
+  eventReader->clearEvent();
+  eventReader->fillEventInfo(4, 1.0, 10.0);
 
   // Incoming particles.
   vector<double> p;
@@ -255,13 +255,13 @@ TClonesArray *
   p.push_back(probeV4.pz());
   p.push_back(probeV4.e());
   p.push_back(probeV4.mCalc());
-  assert(eventReader->fillNewParticle(probe, -1, p));
+  eventReader->fillNewParticle(probe, -1, p);
   p[0] = hitQrkV4.px();
   p[1] = hitQrkV4.py();
   p[2] = hitQrkV4.pz();
   p[3] = hitQrkV4.e();
   p[4] = hitQrkV4.mCalc();
-  assert(eventReader->fillNewParticle(hit_quark, -1, p));
+  eventReader->fillNewParticle(hit_quark, -1, p);
 
   // Outgoing particles.
   p[0] = outLepV4.px();
@@ -269,14 +269,14 @@ TClonesArray *
   p[2] = outLepV4.pz();
   p[3] = outLepV4.e();
   p[4] = outLepV4.mCalc();
-  assert(eventReader->fillNewParticle(out_lepton, 1, p));
+  eventReader->fillNewParticle(out_lepton, 1, p);
   p[0] = finQrkV4.px();
   p[1] = finQrkV4.py();
   p[2] = finQrkV4.pz();
   p[3] = finQrkV4.e();
   p[4] = finQrkV4.mCalc();
-  assert(eventReader->fillNewParticle(final_quark, 1, p));
-  assert(eventReader->setEvent()); 
+  eventReader->fillNewParticle(final_quark, 1, p);
+  eventReader->setEvent(); 
 
   // Now call Pythia to process information.
   pythia8->next();
@@ -296,15 +296,24 @@ TClonesArray *
   pythia8->particleData.mayDecay(kPdgP33m1232_DeltaP, Dp_decflag);
   pythia8->particleData.mayDecay(kPdgP33m1232_DeltaPP,Dpp_decflag);
 
+  std::cout << "probeID = " << probe << std::endl;
+  std::cout << "probeV4 = " << probeV4 << std::endl;
+  std::cout << "hitNucID = " << hit_nucleon << std::endl;
+  std::cout << "hitNucV4 = " << hitNucV4 << std::endl;
+  std::cout << "hitQrkID = " << hit_quark << std::endl;
+  std::cout << "hitQrkV4 = " << hitQrkV4 << std::endl;
+  std::cout << "outLepID = " << out_lepton << std::endl;
+  std::cout << "outLepV4 = " << outLepV4 << std::endl;
+  std::cout << "finQrkID = " << final_quark << std::endl;
+  std::cout << "finQrkV4 = " << finQrkV4 << std::endl;
+
   // get record
   Pythia8::Event &fEvent = pythia8->event;
   int numpart = fEvent.size();
+  // assert(numpart>0);
   if (numpart == 0) {
-      std::cout << "probeV4 = " << probeV4 << std::endl;
-      std::cout << "hitQrkV4 = " << hitQrkV4 << std::endl;
-      std::cout << "outLepV4 = " << outLepV4 << std::endl;
-      std::cout << "finQrkV4 = " << finQrkV4 << std::endl;
-      assert(numpart>0);
+     LOG("PythiaHad", pERROR) << "Returning a null particle list!";
+     return 0;
   }
 
   // Offset the initial particles.
