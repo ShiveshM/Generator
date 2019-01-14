@@ -63,11 +63,16 @@ void PythiaHadronization::Initialize(void) const
 
   // Set up Pythia to read hard scattering from external provider (via
   // the Les Houches Event Accord functionalities)
+  pythia8->readString("Main:numberOfEvents = 1");
   pythia8->readString("Beams:frameType = 5");
-  /* pythia8->readString("Print:quiet     = on"); */
+  pythia8->readString("Check:beams = off");
+  /* pythia8->readString("PDF:Lepton  = off"); */
+  /* pythia8->readString("PartonLevel:ISR  = off"); */
+  pythia8->readString("TimeShower:QEDshowerByL  = off");
   pythia8->readString("LesHouches:setLeptonMass = 2");
   pythia8->readString("LesHouches:setQuarkMass  = 2");
   pythia8->readString("LesHouches:matchInOut    = off");
+  pythia8->readString("Print:quiet = on");
 
   // set up a global instance of LHAup
   Pythia8::LHAup_Genie * eventReader = fPythia8->EventReader();
@@ -222,9 +227,7 @@ TClonesArray *
 
   // Boost to CMS.
   Pythia8::RotBstMatrix toCMS;
-  Pythia8::RotBstMatrix fromCMS;
   toCMS.toCMframe(probeV4, hitNucV4);
-  fromCMS.fromCMframe(probeV4, hitNucV4);
   probeV4.rotbst(toCMS);
   hitNucV4.rotbst(toCMS);
   hitQrkV4.rotbst(toCMS);
@@ -240,8 +243,6 @@ TClonesArray *
   pythia8->setLHAupPtr(eventReader);
 
   // Initialize Pythia.
-  pythia8->readString("Main:numberOfEvents = 1");
-  pythia8->readString("Check:beams = off");
   pythia8->init();
 
   // This should set the LHA event using fortran common blocks
@@ -317,12 +318,16 @@ TClonesArray *
   }
 
   // Offset the initial particles.
-  int ioff = -4;
+  int ioff = 8;
+
+  // Boost into hadronic CM frame.
+  Pythia8::RotBstMatrix toHadCMS;
+  toHadCMS.toCMframe(fEvent[8].p(), fEvent[9].p());
 
   TClonesArray * particle_list = new TClonesArray("genie::GHepParticle", numpart);
   particle_list->SetOwner(true);
 
-  for (int i = 4; i < numpart; ++i) {
+  for (int i = ioff; i < numpart; ++i) {
     /*
      * Convert Pythia8 status code to Pythia6
      * Initial quark has a pythia6 status code of 12
@@ -330,15 +335,24 @@ TClonesArray *
      * Final state particles have a positive pythia8 code and a pythia6 code of 1 (kIStStableFinalState)
      */
 
-    // Skip outgoing primary lepton.
-    if (i == 5) {
-      ioff -= 1;
-      continue;
-    }
+    // Modify mother indexes.
+    int mother1 = fEvent[i].mother1();
+    int mother2 = fEvent[i].mother2();
+    if (mother1 <= ioff) mother1 = -1;
+    else mother1 -= ioff;
+    if (mother2 <= ioff) mother2 = -1;
+    else mother2 -= ioff;
+
+    // Modify daughter indexes.
+    int daughter1 = fEvent[i].daughter1();
+    int daughter2 = fEvent[i].daughter2();
+    if (daughter1 == 0) daughter1 = -1;
+    else daughter1 -= ioff;
+    if (daughter2 == 0) daughter2 = -1;
+    else daughter2 -= ioff;
 
     GHepStatus_t gStatus;
-    if (i == 4) gStatus = kIStDISPreFragmHadronicState;
-    else gStatus = (fEvent[i].status()>0) ? kIStStableFinalState : kIStNucleonTarget;
+    gStatus = (fEvent[i].status()>0) ? kIStStableFinalState : kIStNucleonTarget;
 
     LOG("PythiaHad", pDEBUG)
         << "Adding final state particle pdgc = " << fEvent[i].id()
@@ -357,15 +371,15 @@ TClonesArray *
 
     // Boost back to LAB frame.
     Vec4 p = fEvent[i].p();
-    p.rotbst(fromCMS);
+    p.rotbst(toHadCMS);
 
     new((*particle_list)[i]) GHepParticle(
             fEvent[i].id(),
             gStatus,
-            fEvent[i].mother1()   + ioff,
-            fEvent[i].mother2()   + ioff,
-            fEvent[i].daughter1() + ioff,
-            fEvent[i].daughter2() + ioff,
+            mother1,
+            mother2,
+            daughter1,
+            daughter2,
             p.px(),               // [GeV/c]
             p.py(),               // [GeV/c]
             p.pz(),               // [GeV/c]
