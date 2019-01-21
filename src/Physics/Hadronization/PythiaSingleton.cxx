@@ -150,7 +150,6 @@ PythiaSingleton::PythiaSingleton()
 {
     // Constructor
     if (fgInstance) {
-      // TODO raise assertion?
       LOG("PythiaSingleton", pERROR) <<
           "Instance of PythiaSingleton already exists";
       return;
@@ -168,12 +167,64 @@ PythiaSingleton::~PythiaSingleton()
         delete fgInstance;
         fgInstance = 0;
     }
-    delete fPythia;
-    delete fEventReader;
+
+    if ( beamMap.empty() ) {
+      delete fPythia;
+      delete fEventReader;
+    }
+    else {
+      std::map< std::pair<int, int>,
+                std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*> >::iterator itr;
+      for (itr = beamMap.begin(); itr != beamMap.end(); ++itr) {
+        delete itr->second.first;
+        delete itr->second.second;
+      }
+    }
 }
 //____________________________________________________________________________
-PythiaSingleton* PythiaSingleton::Instance() 
+PythiaSingleton* PythiaSingleton::Instance()
 {
     return fgInstance ? fgInstance : (fgInstance = new PythiaSingleton());
 }
+//____________________________________________________________________________
+bool PythiaSingleton::BeamConfigExists(int beamA, int beamB) 
+{
+    std::map< std::pair<int, int>,
+              std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*> >::iterator itr;
+    itr = beamMap.find(std::pair<int, int>(beamA, beamB));
+    if (itr != beamMap.end()) {
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+//____________________________________________________________________________
+void PythiaSingleton::InitializeBeam(int beamA, int beamB) 
+{
+    // Assign current pythia object to the map if it's empty.
+    if ( beamMap.empty() ) {
+        beamMap[std::pair<int, int>(beamA, beamB)] =
+          std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*>(fPythia, fEventReader);
+        return;
+    }
 
+    std::map< std::pair<int, int>,
+              std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*> >::iterator itr;
+    itr = beamMap.find(std::pair<int, int>(beamA, beamB));
+    if (itr != beamMap.end()) {
+        // If the beam config exists, assign existing pythia object to fPythia.
+        fPythia = itr->second.first;
+        fEventReader = itr->second.second;
+    }
+    else {
+        // Otherwise, create a new Pythia object.
+        fPythia = new Pythia8::Pythia();
+        fEventReader = new Pythia8::LHAup_Genie();
+        beamMap[std::pair<int, int>(beamA, beamB)] =
+          std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*>(fPythia, fEventReader);
+    }
+
+    return;
+}
+//____________________________________________________________________________

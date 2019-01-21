@@ -97,14 +97,19 @@ class PythiaSingleton : public TObject{
 
 public:
     PythiaSingleton();
-    virtual ~PythiaSingleton();
+    ~PythiaSingleton();
 
     static PythiaSingleton * Instance ();
     Pythia8::Pythia *      Pythia8     () {return fPythia;}
     Pythia8::LHAup_Genie * EventReader () {return fEventReader;}
+    bool BeamConfigExists(int beamA, int beamB);
+    void InitializeBeam  (int beamA, int beamB);
 
 private:
     static PythiaSingleton * fgInstance;   ///< singleton instance
+
+    std::map< std::pair<int, int>,
+              std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*> > beamMap;
     Pythia8::Pythia * fPythia;             ///< PYTHIA8 instance
     Pythia8::LHAup_Genie * fEventReader;   ///< LHAup instance
 

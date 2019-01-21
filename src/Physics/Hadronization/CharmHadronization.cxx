@@ -72,6 +72,7 @@ CharmHadronization::~CharmHadronization()
 //____________________________________________________________________________
 void CharmHadronization::Initialize(void) const
 {
+  // TODO(shivesh)
   fPythia8 = PythiaSingleton::Instance();
   Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
   pythia8->settings.resetAll();
