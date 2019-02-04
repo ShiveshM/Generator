@@ -152,10 +152,14 @@ TClonesArray *
   RefFrame_t rf = kRfLab; // LAB frame
   TLorentzVector probe_p4       = *init_state.GetProbeP4(rf);
   TLorentzVector hit_nucleon_p4 = target.HitNucP4();
-  TLorentzVector hit_quark_p4   = TLorentzVector(
-      0., 0., 0., fPythia8->Pythia8()->particleData.m0(hit_quark)  // at rest in LAB frame
-  );
   TLorentzVector out_lepton_p4  = kinematics.FSLeptonP4();
+
+  // Calculate hit quark momentum. TODO(shivesh)
+  double Q2 = -(probe_p4 - out_lepton_p4).M2();
+  double x  = Q2 / (2 * hit_nucleon_p4.M() * (probe_p4.E() - out_lepton_p4.E()));
+  TLorentzVector hit_quark_p4   = TLorentzVector(
+      0., 0., hit_nucleon_p4.M() * x, hit_nucleon_p4.M() * x
+  );
 
   Pythia8::Vec4 probeV4 = Pythia8::Vec4(
       probe_p4.Px(), probe_p4.Py(), probe_p4.Pz(), probe_p4.E()
@@ -181,9 +185,10 @@ TClonesArray *
   // Calculate final quark 4 momentum.
   Pythia8::Vec4 finQrkV4 = probeV4 + hitQrkV4 - outLepV4;
 
-  // Setup Pythia object.
-  bool beamConfigExists = fPythia8->BeamConfigExists(probe, hit_nucleon);
-  fPythia8->InitializeBeam(probe, hit_nucleon);
+  // Setup Pythia object. TODO(shivesh)
+  // bool beamConfigExists = fPythia8->BeamConfigExists(probe, hit_nucleon);
+  /* fPythia8->InitializeBeam(probe, hit_nucleon); */
+  bool beamConfigExists = false;
   Pythia8::Pythia      * pythia8     = fPythia8->Pythia8();
   Pythia8::LHAup_Genie * eventReader = fPythia8->EventReader();
 
@@ -225,9 +230,9 @@ TClonesArray *
   if (!beamConfigExists) {
     pythia8->settings.resetAll();
 
-    // sync GENIE/PYTHIA8 seed number
-    pythia8->readString("Random:setSeed = on");
-    pythia8->settings.mode("Random:seed", RandomGen::Instance()->GetSeed());
+    // sync GENIE/PYTHIA8 seed number TODO(shivesh)
+    /* pythia8->readString("Random:setSeed = on"); */
+    /* pythia8->settings.mode("Random:seed", RandomGen::Instance()->GetSeed()); */
 
     // set up a global instance of LHAup
     eventReader->setPointers(&pythia8->settings);
@@ -328,15 +333,23 @@ TClonesArray *
      return 0;
   }
 
+  TClonesArray * particle_list = new TClonesArray("genie::GHepParticle", numpart);
+  particle_list->SetOwner(true);
+
   // Offset the initial particles.
-  int ioff = 8;
+  int ioff = -1; int ioffUpper = -1;
+  for (int i = 0; i < numpart; ++i) {
+    if (fEvent[i].status() > 0 && !(fEvent[i].id() == out_lepton)) {
+      ioff = fEvent[i].mother1();
+      ioffUpper = fEvent[i].mother2();
+      break;
+    }
+  }
+  assert(ioff > -1);
 
   // Boost into hadronic CM frame.
   Pythia8::RotBstMatrix toHadCMS;
-  toHadCMS.toCMframe(fEvent[8].p(), fEvent[9].p());
-
-  TClonesArray * particle_list = new TClonesArray("genie::GHepParticle", numpart);
-  particle_list->SetOwner(true);
+  toHadCMS.toCMframe(fEvent[ioff].p(), fEvent[ioffUpper].p());
 
   for (int i = ioff; i < numpart; ++i) {
     /*
@@ -349,9 +362,9 @@ TClonesArray *
     // Modify mother indexes.
     int mother1 = fEvent[i].mother1();
     int mother2 = fEvent[i].mother2();
-    if (mother1 <= ioff) mother1 = -1;
+    if (mother1 < ioff) mother1 = -1;
     else mother1 -= ioff;
-    if (mother2 <= ioff) mother2 = -1;
+    if (mother2 < ioff) mother2 = -1;
     else mother2 -= ioff;
 
     // Modify daughter indexes.
