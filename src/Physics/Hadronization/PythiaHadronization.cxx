@@ -154,21 +154,11 @@ TClonesArray *
   TLorentzVector hit_nucleon_p4 = target.HitNucP4();
   TLorentzVector out_lepton_p4  = kinematics.FSLeptonP4();
 
-  // Calculate hit quark momentum. TODO(shivesh)
-  double Q2 = -(probe_p4 - out_lepton_p4).M2();
-  double x  = Q2 / (2 * hit_nucleon_p4.M() * (probe_p4.E() - out_lepton_p4.E()));
-  TLorentzVector hit_quark_p4   = TLorentzVector(
-      0., 0., hit_nucleon_p4.M() * x, hit_nucleon_p4.M() * x
-  );
-
   Pythia8::Vec4 probeV4 = Pythia8::Vec4(
       probe_p4.Px(), probe_p4.Py(), probe_p4.Pz(), probe_p4.E()
       );
   Pythia8::Vec4 hitNucV4 = Pythia8::Vec4(
       hit_nucleon_p4.Px(), hit_nucleon_p4.Py(), hit_nucleon_p4.Pz(), hit_nucleon_p4.E()
-      );
-  Pythia8::Vec4 hitQrkV4 = Pythia8::Vec4(
-      hit_quark_p4.Px(), hit_quark_p4.Py(), hit_quark_p4.Pz(), hit_quark_p4.E()
       );
   Pythia8::Vec4 outLepV4 = Pythia8::Vec4(
       out_lepton_p4.Px(), out_lepton_p4.Py(), out_lepton_p4.Pz(), out_lepton_p4.E()
@@ -179,11 +169,24 @@ TClonesArray *
   toCMS.toCMframe(probeV4, hitNucV4);
   probeV4.rotbst(toCMS);
   hitNucV4.rotbst(toCMS);
-  hitQrkV4.rotbst(toCMS);
   outLepV4.rotbst(toCMS);
+
+  // Calculate hit quark momentum. TODO(shivesh)
+  double Q2 = -(probe_p4 - out_lepton_p4).M2();
+  double x  = Q2 / (2 * hit_nucleon_p4.M() * (probe_p4.E() - out_lepton_p4.E()));
+  TLorentzVector hit_quark_p4   = TLorentzVector(
+      0., 0., -hit_nucleon_p4.M() * x, hit_nucleon_p4.M() * x
+  );
+
+  Pythia8::Vec4 hitQrkV4 = Pythia8::Vec4(
+      hit_quark_p4.Px(), hit_quark_p4.Py(), hit_quark_p4.Pz(), hit_quark_p4.E()
+  );
 
   // Calculate final quark 4 momentum.
   Pythia8::Vec4 finQrkV4 = probeV4 + hitQrkV4 - outLepV4;
+  double mom3_2 = pow(finQrkV4.px(),2)+pow(finQrkV4.py(),2)+pow(finQrkV4.pz(),2);
+  double finQrkMass_2 = pow(fPythia8->Pythia8()->particleData.m0(final_quark),2);
+  finQrkV4.e(sqrt(mom3_2+finQrkMass_2));
 
   // Setup Pythia object. TODO(shivesh)
   // bool beamConfigExists = fPythia8->BeamConfigExists(probe, hit_nucleon);
