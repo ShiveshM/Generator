@@ -11,13 +11,34 @@
 #include <TPrimary.h>
 
 #include "Pythia8/Pythia.h"
-using namespace Pythia8;
 
+using namespace std;
 
 namespace Pythia8 {
+//____________________________________________________________________________
+class GBeamShape : public BeamShape {
 
-//==========================================================================
+public:
 
+  // Constructor.
+  GBeamShape(double eMax) : BeamShape() {this->eMax = eMax;}
+
+  // Initialize beam parameters.
+  // In this particular example we will reuse the existing settings names
+  // but with modified meaning, so init() in the base class can be kept.
+  // virtual void init( Settings& settings, Rndm* rndmPtrIn);
+
+  // Set the two beam momentum deviations and the beam vertex.
+  // Note that momenta are in units of GeV and vertices in mm,
+  // always with c = 1, so that e.g. time is in mm/c.
+  virtual void pick();
+
+  double eMax = 80.;
+  double pZspread;
+  virtual void setSpread(double pIn) {pZspread = pIn;}
+  
+};
+//____________________________________________________________________________
 // A derived class with initialization information from the HEPRUP
 // Fortran commonblock and event information from the HEPEUP one.
 
@@ -64,7 +85,7 @@ public:
         double aqed = 0.00729735, double aqcd = 0.13);
 
     // Attach new particle to the event.
-    bool fillNewParticle(int idPart, int statusPart, vector<double> pPart,
+    bool fillNewParticle(int idPart, int statusPart, Pythia8::Vec4 pPart,
         int mother1Part = 0, int mother2Part = 0, int colPart = 0,
         int acolPart = 0, double vtimPart = -1., double spinPart = -9.);
 
@@ -90,6 +111,7 @@ private:
 };
 
 }
+//____________________________________________________________________________
 
 class Pythia;
 
@@ -99,19 +121,23 @@ public:
     PythiaSingleton();
     ~PythiaSingleton();
 
-    static PythiaSingleton * Instance ();
+    static PythiaSingleton * Instance () {
+        return fgInstance ? fgInstance : (fgInstance = new PythiaSingleton());
+    }
     Pythia8::Pythia *      Pythia8     () {return fPythia;}
     Pythia8::LHAup_Genie * EventReader () {return fEventReader;}
+    Pythia8::GBeamShape *  GBeamShape  () {return fBeamShape;}
     bool BeamConfigExists(int beamA, int beamB);
-    void InitializeBeam  (int beamA, int beamB);
+    void InitializeBeam  (int beamA, int beamB, double eMax);
 
 private:
     static PythiaSingleton * fgInstance;   ///< singleton instance
 
-    std::map< std::pair<int, int>,
-              std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*> > beamMap;
-    Pythia8::Pythia * fPythia;             ///< PYTHIA8 instance
-    Pythia8::LHAup_Genie * fEventReader;   ///< LHAup instance
+    map< pair<int, int>, pair<Pythia8::Pythia*,
+      pair<Pythia8::LHAup_Genie*, Pythia8::GBeamShape*> > > beamMap;
+    Pythia8::Pythia      * fPythia      = 0; ///< PYTHIA8 instance
+    Pythia8::LHAup_Genie * fEventReader = 0; ///< LHAup instance
+    Pythia8::GBeamShape  * fBeamShape   = 0; ///< GBeamShape instance
 
 ClassDef(PythiaSingleton,1)
 };

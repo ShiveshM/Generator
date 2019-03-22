@@ -9,12 +9,27 @@
 using namespace genie;
 using namespace genie::constants;
 
-using namespace Pythia8;
+using namespace std;
 
 ClassImp(PythiaSingleton)
 
 PythiaSingleton * PythiaSingleton::fgInstance = 0;
 
+//____________________________________________________________________________
+// Set the two beam momentum deviations and the beam vertex.
+// Note that momenta are in units of GeV and vertices in mm,
+// always with c = 1, so that e.g. time is in mm/c.
+void Pythia8::GBeamShape::pick() {
+  // Reset all values.
+  deltaPxA = deltaPyA = deltaPzA = deltaPxB = deltaPyB = deltaPzB
+    = vertexX = vertexY = vertexZ = vertexT = 0.;
+
+  // Set beam A transverse momentum deviation by a two-dimensional Gaussian.
+  if (allowMomentumSpread) {
+    //    deltaPzA = -9.999;
+    deltaPzA = sigmaPzA - eMax;
+  } 
+}
 //____________________________________________________________________________
 Pythia8::LHAup_Genie::LHAup_Genie()
 {
@@ -99,8 +114,8 @@ bool Pythia8::LHAup_Genie::fillProcess(int idProcIn, double xsec, double xsecerr
     return true;
 }
 //____________________________________________________________________________
-bool Pythia8::LHAup_Genie::fillEventInfo( int nParticles, double xwgt, double scale,
-    double aqed, double aqcd)
+bool Pythia8::LHAup_Genie::fillEventInfo(int nParticles, double xwgt,
+    double scale, double aqed, double aqcd)
 {
     nParticlesStore = nParticles;
     xwgtStore = xwgt;
@@ -110,9 +125,9 @@ bool Pythia8::LHAup_Genie::fillEventInfo( int nParticles, double xwgt, double sc
     return true;
 }
 //____________________________________________________________________________
-bool Pythia8::LHAup_Genie::fillNewParticle(int idPart, int statusPart, vector<double> pPart,
-    int mother1Part, int mother2Part, int colPart, int acolPart, double vtimPart,
-    double spinPart)
+bool Pythia8::LHAup_Genie::fillNewParticle(int idPart, int statusPart,
+    Pythia8::Vec4 pPart, int mother1Part, int mother2Part, int colPart,
+    int acolPart, double vtimPart, double spinPart)
 {
     idPartStore.push_back(idPart);
     statusPartStore.push_back(statusPart);
@@ -126,7 +141,13 @@ bool Pythia8::LHAup_Genie::fillNewParticle(int idPart, int statusPart, vector<do
     acolPartStore.push_back(acolPart);
     vtimPartStore.push_back(vtimPart);
     spinPartStore.push_back(spinPart);
-    pPartStore.push_back(pPart);
+    vector<double> temp;
+    temp.push_back(pPart.px());
+    temp.push_back(pPart.py());
+    temp.push_back(pPart.pz());
+    temp.push_back(pPart.e());
+    temp.push_back(pPart.mCalc());
+    pPartStore.push_back(temp);
     return true;
 }
 //____________________________________________________________________________
@@ -156,42 +177,55 @@ PythiaSingleton::PythiaSingleton()
     }
 
     fPythia = new Pythia8::Pythia();
-    fEventReader = new Pythia8::LHAup_Genie();
 }
 //____________________________________________________________________________
 PythiaSingleton::~PythiaSingleton()
 {
-    // Destructor
+    // // Destructor
+    if (beamMap.empty()) {
+      if (fPythia) {
+        delete fPythia;
+        fPythia = 0;
+      }
+      if (fEventReader) {
+        delete fEventReader;
+        fEventReader = 0;
+      }
+      if (fBeamShape) {
+        delete fBeamShape;
+        fBeamShape = 0;
+      }
+    }
+    else {
+      map< pair<int, int>, pair<Pythia8::Pythia*,
+        pair<Pythia8::LHAup_Genie*, Pythia8::GBeamShape*> > >::iterator itr;
+      for (itr = beamMap.begin(); itr != beamMap.end(); ++itr) {
+        if (itr->second.first) {
+            delete itr->second.first;
+            itr->second.first = 0;
+        }
+        if (itr->second.second.first) {
+            delete itr->second.second.first;
+            itr->second.second.first = 0;
+        }
+        if (itr->second.second.second) {
+            delete itr->second.second.second;
+            itr->second.second.second = 0;
+        }
+      }
+    }
+
     if (fgInstance) {
-        fgInstance->Delete();
         delete fgInstance;
         fgInstance = 0;
     }
-
-    if ( beamMap.empty() ) {
-      delete fPythia;
-      delete fEventReader;
-    }
-    else {
-      std::map< std::pair<int, int>,
-                std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*> >::iterator itr;
-      for (itr = beamMap.begin(); itr != beamMap.end(); ++itr) {
-        delete itr->second.first;
-        delete itr->second.second;
-      }
-    }
-}
-//____________________________________________________________________________
-PythiaSingleton* PythiaSingleton::Instance()
-{
-    return fgInstance ? fgInstance : (fgInstance = new PythiaSingleton());
 }
 //____________________________________________________________________________
 bool PythiaSingleton::BeamConfigExists(int beamA, int beamB) 
 {
-    std::map< std::pair<int, int>,
-              std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*> >::iterator itr;
-    itr = beamMap.find(std::pair<int, int>(beamA, beamB));
+    map< pair<int, int>, pair<Pythia8::Pythia*,
+      pair<Pythia8::LHAup_Genie*, Pythia8::GBeamShape*> > >::iterator itr;
+    itr = beamMap.find(pair<int, int>(beamA, beamB));
     if (itr != beamMap.end()) {
         return true;
     }
@@ -200,29 +234,39 @@ bool PythiaSingleton::BeamConfigExists(int beamA, int beamB)
     }
 }
 //____________________________________________________________________________
-void PythiaSingleton::InitializeBeam(int beamA, int beamB) 
+void PythiaSingleton::InitializeBeam(int beamA, int beamB, double eMax) 
 {
     // Assign current pythia object to the map if it's empty.
-    if ( beamMap.empty() ) {
-        beamMap[std::pair<int, int>(beamA, beamB)] =
-          std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*>(fPythia, fEventReader);
+    if (beamMap.empty()) {
+        fEventReader = new Pythia8::LHAup_Genie();
+        fBeamShape = new Pythia8::GBeamShape(eMax);
+        pair<Pythia8::LHAup_Genie*, Pythia8::GBeamShape*> fUtil(fEventReader, fBeamShape);
+        beamMap[pair<int, int>(beamA, beamB)] =
+          pair<Pythia8::Pythia*, pair<Pythia8::LHAup_Genie*, Pythia8::GBeamShape*> >
+          (fPythia, fUtil);
         return;
     }
 
-    std::map< std::pair<int, int>,
-              std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*> >::iterator itr;
-    itr = beamMap.find(std::pair<int, int>(beamA, beamB));
+    map< pair<int, int>, pair<Pythia8::Pythia*,
+      pair<Pythia8::LHAup_Genie*, Pythia8::GBeamShape*> > >::iterator itr;
+    itr = beamMap.find(pair<int, int>(beamA, beamB));
     if (itr != beamMap.end()) {
         // If the beam config exists, assign existing pythia object to fPythia.
-        fPythia = itr->second.first;
-        fEventReader = itr->second.second;
+        fPythia      = itr->second.first;
+        fEventReader = itr->second.second.first;
+        fBeamShape   = itr->second.second.second;
     }
     else {
         // Otherwise, create a new Pythia object.
-        fPythia = new Pythia8::Pythia();
+        fPythia = new Pythia8::Pythia(
+            fPythia->settings, fPythia->particleData, false
+        );
         fEventReader = new Pythia8::LHAup_Genie();
-        beamMap[std::pair<int, int>(beamA, beamB)] =
-          std::pair<Pythia8::Pythia*, Pythia8::LHAup_Genie*>(fPythia, fEventReader);
+        fBeamShape = new Pythia8::GBeamShape(eMax);
+        pair<Pythia8::LHAup_Genie*, Pythia8::GBeamShape*> fUtil(fEventReader, fBeamShape);
+        beamMap[pair<int, int>(beamA, beamB)] = pair<Pythia8::Pythia*,
+          pair<Pythia8::LHAup_Genie*, Pythia8::GBeamShape*> >
+          (fPythia, fUtil);
     }
 
     return;

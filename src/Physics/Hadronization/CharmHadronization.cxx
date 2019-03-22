@@ -64,10 +64,6 @@ CharmHadronization::~CharmHadronization()
 
   delete fDsFracSpl;
   fDsFracSpl = 0;
-
-  fPythia8->Delete();
-  delete fPythia8;
-  fPythia8 = 0;
 }
 //____________________________________________________________________________
 void CharmHadronization::Initialize(void) const

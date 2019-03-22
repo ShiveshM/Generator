@@ -50,14 +50,13 @@ HadronizationModelBase("genie::PythiaHadronization", config)
 //____________________________________________________________________________
 PythiaHadronization::~PythiaHadronization()
 {
-  fPythia8->Delete();
-  delete fPythia8;
-  fPythia8 = 0;
 }
 //____________________________________________________________________________
 void PythiaHadronization::Initialize(void) const
 {
   fPythia8 = PythiaSingleton::Instance();
+  Pythia8::Pythia * pythia8 = fPythia8->Pythia8();
+  pythia8->settings.resetAll();
 
   // sync GENIE/PYTHIA8 seed number
   RandomGen::Instance();
@@ -119,7 +118,7 @@ TClonesArray *
   // Generate the quark system (q + qq) initiating the hadronization
   //
 
-  int  final_quark = 0; // leading quark (hit quark after the interaction)
+  int final_quark = 0; // leading quark (hit quark after the interaction)
 
   // Figure out the what happens to the hit quark after the interaction
   if (isnc || isem || isdm) {
@@ -164,20 +163,32 @@ TClonesArray *
       out_lepton_p4.Px(), out_lepton_p4.Py(), out_lepton_p4.Pz(), out_lepton_p4.E()
       );
 
-  // Boost to CMS.
+  // Neutrino energy in LAB frame.
+  double eNu = probeV4.e();
+
+  // Maximum neutrino energy allowable.
+  double eMax = 1e5; // GeV
+
+  // Setup Pythia object.
+  bool beamConfigExists = fPythia8->BeamConfigExists(probe, hit_nucleon);
+  fPythia8->InitializeBeam(probe, hit_nucleon, eMax);
+  Pythia8::Pythia      * pythia8     = fPythia8->Pythia8();
+  Pythia8::LHAup_Genie * eventReader = fPythia8->EventReader();
+  Pythia8::GBeamShape  * beamShape   = fPythia8->GBeamShape();
+
+  // Boost to CMS of probe and hit nucleon.
   Pythia8::RotBstMatrix toCMS;
   toCMS.toCMframe(probeV4, hitNucV4);
   probeV4.rotbst(toCMS);
   hitNucV4.rotbst(toCMS);
   outLepV4.rotbst(toCMS);
 
-  // Calculate hit quark momentum. TODO(shivesh)
+  // Calculate hit quark momentum.
   double Q2 = -(probe_p4 - out_lepton_p4).M2();
   double x  = Q2 / (2 * hit_nucleon_p4.M() * (probe_p4.E() - out_lepton_p4.E()));
   TLorentzVector hit_quark_p4   = TLorentzVector(
       0., 0., -hit_nucleon_p4.M() * x, hit_nucleon_p4.M() * x
   );
-
   Pythia8::Vec4 hitQrkV4 = Pythia8::Vec4(
       hit_quark_p4.Px(), hit_quark_p4.Py(), hit_quark_p4.Pz(), hit_quark_p4.E()
   );
@@ -185,15 +196,8 @@ TClonesArray *
   // Calculate final quark 4 momentum.
   Pythia8::Vec4 finQrkV4 = probeV4 + hitQrkV4 - outLepV4;
   double mom3_2 = pow(finQrkV4.px(),2)+pow(finQrkV4.py(),2)+pow(finQrkV4.pz(),2);
-  double finQrkMass_2 = pow(fPythia8->Pythia8()->particleData.m0(final_quark),2);
+  double finQrkMass_2 = pow(pythia8->particleData.m0(final_quark),2);
   finQrkV4.e(sqrt(mom3_2+finQrkMass_2));
-
-  // Setup Pythia object. TODO(shivesh)
-  // bool beamConfigExists = fPythia8->BeamConfigExists(probe, hit_nucleon);
-  /* fPythia8->InitializeBeam(probe, hit_nucleon); */
-  bool beamConfigExists = false;
-  Pythia8::Pythia      * pythia8     = fPythia8->Pythia8();
-  Pythia8::LHAup_Genie * eventReader = fPythia8->EventReader();
 
   // Determine how jetset treats un-stable particles appearing in hadronization
 
@@ -231,28 +235,30 @@ TClonesArray *
 
   // -- hadronize --
   if (!beamConfigExists) {
-    pythia8->settings.resetAll();
-
-    // sync GENIE/PYTHIA8 seed number TODO(shivesh)
-    /* pythia8->readString("Random:setSeed = on"); */
-    /* pythia8->settings.mode("Random:seed", RandomGen::Instance()->GetSeed()); */
-
-    // set up a global instance of LHAup
-    eventReader->setPointers(&pythia8->settings);
-
     // Set up Pythia to read hard scattering from external provider (via
     // the Les Houches Event Accord functionalities)
+    pythia8->readString("ProcessLevel:all = on");
     pythia8->readString("Beams:frameType = 5");
     pythia8->readString("Check:beams = off");
     pythia8->readString("TimeShower:QEDshowerByL  = off");
     pythia8->readString("LesHouches:setLeptonMass = 2");
     pythia8->readString("LesHouches:setQuarkMass  = 2");
     pythia8->readString("LesHouches:matchInOut    = off");
+    pythia8->readString("LesHouches:mRecalculate   = 1e-6");  
+    pythia8->readString("Beams:allowMomentumSpread = on");
+    pythia8->readString("BeamRemnants:primordialKT = on");
+    pythia8->readString("BeamRemnants:primordialKTsoft = 0.0");
+    pythia8->readString("BeamRemnants:primordialKThard = 0.0");    
     pythia8->readString("Print:quiet = on");
 
-    // Setup beam.
-    // TODO(shivesh): figure out maximum neutrino energy in CMS frame.
-    eventReader->fillInit(probe, hit_nucleon, probeV4.e(), hitNucV4.e());
+    // Hand BeamShape pointer to Pythia.
+    pythia8->setBeamShapePtr(beamShape);
+
+    // Set up a global instance of LHAup.
+    eventReader->setPointers(&pythia8->settings);
+    eventReader->fillInit(
+        probe, hit_nucleon, eMax, pythia8->particleData.m0(hit_nucleon)
+    );
     eventReader->setInit();
     pythia8->setLHAupPtr(eventReader);
 
@@ -263,38 +269,24 @@ TClonesArray *
     pythia8->event.reset();
   }
 
+  // The variable neutrino energy can be handled using the BeamShape interface.
+  // I have to reinitialize the BeamShape in each event, but this is only
+  // because I want to set a parameter that represents the reduction in energy
+  // for the incoming neutrino.
+  pythia8->settings.parm("Beams:sigmaPzA", eNu);
+  beamShape->init(pythia8->settings, &pythia8->rndm);
+
   // This should set the LHA event using fortran common blocks
   eventReader->clearEvent();
   eventReader->fillEventInfo(4, 1.0, 10.0);
 
   // Incoming particles.
-  vector<double> p;
-  p.push_back(probeV4.px());
-  p.push_back(probeV4.py());
-  p.push_back(probeV4.pz());
-  p.push_back(probeV4.e());
-  p.push_back(probeV4.mCalc());
-  eventReader->fillNewParticle(probe, -1, p);
-  p[0] = hitQrkV4.px();
-  p[1] = hitQrkV4.py();
-  p[2] = hitQrkV4.pz();
-  p[3] = hitQrkV4.e();
-  p[4] = hitQrkV4.mCalc();
-  eventReader->fillNewParticle(hit_quark, -1, p);
+  eventReader->fillNewParticle(probe,     -1, probeV4);
+  eventReader->fillNewParticle(hit_quark, -1, hitQrkV4);
 
   // Outgoing particles.
-  p[0] = outLepV4.px();
-  p[1] = outLepV4.py();
-  p[2] = outLepV4.pz();
-  p[3] = outLepV4.e();
-  p[4] = outLepV4.mCalc();
-  eventReader->fillNewParticle(out_lepton, 1, p);
-  p[0] = finQrkV4.px();
-  p[1] = finQrkV4.py();
-  p[2] = finQrkV4.pz();
-  p[3] = finQrkV4.e();
-  p[4] = finQrkV4.mCalc();
-  eventReader->fillNewParticle(final_quark, 1, p);
+  eventReader->fillNewParticle(out_lepton,  1, outLepV4);
+  eventReader->fillNewParticle(final_quark, 1, finQrkV4);
   eventReader->setEvent(); 
 
   // Now call Pythia to process information.
@@ -315,18 +307,6 @@ TClonesArray *
   pythia8->particleData.mayDecay(kPdgP33m1232_DeltaP, Dp_decflag);
   pythia8->particleData.mayDecay(kPdgP33m1232_DeltaPP,Dpp_decflag);
 
-  // TODO(shivesh): remove
-  std::cout << "probeID = " << probe << std::endl;
-  std::cout << "probeV4 = " << probeV4 << std::endl;
-  std::cout << "hitNucID = " << hit_nucleon << std::endl;
-  std::cout << "hitNucV4 = " << hitNucV4 << std::endl;
-  std::cout << "hitQrkID = " << hit_quark << std::endl;
-  std::cout << "hitQrkV4 = " << hitQrkV4 << std::endl;
-  std::cout << "outLepID = " << out_lepton << std::endl;
-  std::cout << "outLepV4 = " << outLepV4 << std::endl;
-  std::cout << "finQrkID = " << final_quark << std::endl;
-  std::cout << "finQrkV4 = " << finQrkV4 << std::endl;
-
   // get record
   Pythia8::Event &fEvent = pythia8->event;
   int numpart = fEvent.size();
@@ -342,7 +322,7 @@ TClonesArray *
   // Offset the initial particles.
   int ioff = -1; int ioffUpper = -1;
   for (int i = 0; i < numpart; ++i) {
-    if (fEvent[i].status() > 0 && !(fEvent[i].id() == out_lepton)) {
+    if (fEvent[i].status() > 80 && !(fEvent[i].id() == out_lepton)) {
       ioff = fEvent[i].mother1();
       ioffUpper = fEvent[i].mother2();
       break;
@@ -397,7 +377,7 @@ TClonesArray *
     }
 
     // Boost back to LAB frame.
-    Vec4 p = fEvent[i].p();
+    Pythia8::Vec4 p = fEvent[i].p();
     p.rotbst(toHadCMS);
 
     new((*particle_list)[i]) GHepParticle(

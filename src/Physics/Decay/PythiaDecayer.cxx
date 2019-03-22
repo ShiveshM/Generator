@@ -61,9 +61,6 @@ DecayModelI("genie::PythiaDecayer", config)
 //____________________________________________________________________________
 PythiaDecayer::~PythiaDecayer() 
 { 
-  fPythia8->Delete();
-  delete fPythia8;
-  fPythia8 = 0;
 }
 //____________________________________________________________________________
 bool PythiaDecayer::IsHandled(int code) const
