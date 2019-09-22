@@ -64,12 +64,11 @@ void Pythia8Hadronization::Initialize(void) const
 {
 #ifdef __GENIE_PYTHIA8_ENABLED__
   fPythia = Pythia8Singleton::Instance();
-  fPythia->Pythia8()->readString("ProcessLevel:all = off");
-  fPythia->Pythia8()->readString("Print:quiet      = on");
+  Pythia8::Pythia * pythia8 = fPythia->Pythia8();
+  pythia8->settings.resetAll();
 
-  // sync GENIE/PYTHIA6 seed number
+  // sync GENIE/PYTHIA8 seed number
   RandomGen::Instance();
-  fPythia->Pythia8()->init();
 #endif
 }
 //____________________________________________________________________________
@@ -168,6 +167,7 @@ TClonesArray *
   int  probe       = init_state.ProbePdg();
   int  hit_nucleon = target.HitNucPdg();
   int  hit_quark   = target.HitQrkPdg();
+  int  out_lepton  = interaction->FSPrimLeptonPdg();
   bool from_sea    = target.HitSeaQrk();
 
   LOG("Pythia8Had", pNOTICE)
@@ -199,7 +199,6 @@ TClonesArray *
   //
 
   int  final_quark = 0; // leading quark (hit quark after the interaction)
-  int  diquark     = 0; // remnant diquark (xF<0 at hadronic CMS)
 
   // Figure out the what happens to the hit quark after the interaction
   if (isnc || isem || isdm) {
@@ -220,77 +219,6 @@ TClonesArray *
     }
   }//CC
 
-  // Figure out what the remnant diquark is.
-  // Note from Hugh, following a conversation with his local HEP theorist
-  // (Gary Goldstein): "I am told that the probability of finding the diquark
-  // in the singlet vs. triplet states is 50-50."
-
-  // hit quark = valence quark
-  if(!from_sea) {
-    if (isp && isu) diquark = kPdgUDDiquarkS1; /* u(->q) + ud */
-    if (isp && isd) diquark = kPdgUUDiquarkS1; /* d(->q) + uu */
-    if (isn && isu) diquark = kPdgDDDiquarkS1; /* u(->q) + dd */
-    if (isn && isd) diquark = kPdgUDDiquarkS1; /* d(->q) + ud */
-  }
-  // hit quark = sea quark
-  else {
-    if(isp && isu) diquark = kPdgUDDiquarkS1; /* u(->q) + bar{u} uud (=ud) */
-    if(isp && isd) diquark = kPdgUUDiquarkS1; /* d(->q) + bar{d} uud (=uu) */
-    if(isn && isu) diquark = kPdgDDDiquarkS1; /* u(->q) + bar{u} udd (=dd) */
-    if(isn && isd) diquark = kPdgUDDiquarkS1; /* d(->q) + bar{d} udd (=ud) */
-
-    // The following section needs revisiting.
-
-    // The lepton is scattered off a sea antiquark, materializing its quark
-    // partner and leaving me with a 5q system ( <qbar + q> + qqq(valence) )
-    // I will force few qbar+q annhilations below to get my quark/diquark system
-    // Probably it is best to leave the qqq system in the final state and then
-    // just do the fragmentation of the qbar q system? But how do I figure out
-    // how to split the available energy?
-
-    /* bar{u} (-> bar{d}) + u uud => u + uu */
-    if(isp && isub && iscc)         {final_quark = kPdgUQuark; diquark = kPdgUUDiquarkS1;}
-    /* bar{u} (-> bar{u}) + u uud => u + ud */
-    if(isp && isub && (isnc||isem||isdm)) {final_quark = kPdgUQuark; diquark = kPdgUDDiquarkS1;}
-    /* bar{d} (-> bar{u}) + d uud => d + ud */
-    if(isp && isdb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;}
-    /* bar{d} (-> bar{d}) + d uud => d + uu */
-    if(isp && isdb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUUDiquarkS1;}
-    /* bar{u} (-> bar{d}) + u udd => u + ud */
-    if(isn && isub && iscc)         {final_quark = kPdgUQuark; diquark = kPdgUDDiquarkS1;}
-    /* bar{u} (-> bar{u}) + u udd => u + dd */
-    if(isn && isub && (isnc||isem||isdm)) {final_quark = kPdgUQuark; diquark = kPdgDDDiquarkS1;}
-    /* bar{d} (-> bar{u}) + d udd => d + dd */
-    if(isn && isdb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgDDDiquarkS1;}
-    /* bar{d} (-> bar{d}) + d udd => d + ud */
-    if(isn && isdb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;}
-
-    // The neutrino is scatterred off s or sbar sea quarks
-    // For the time being I will handle s like d and sbar like dbar (copy & paste
-    // from above) so that I conserve charge.
-
-    if(iss || issb) {
-       LOG("Pythia8Had", pNOTICE) 
-                 << "Can not really handle a hit s or sbar quark / Faking it";
-
-       if(isp && iss) { diquark = kPdgUUDiquarkS1; }
-       if(isn && iss) { diquark = kPdgUDDiquarkS1; }
-
-       if(isp && issb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;}
-       if(isp && issb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUUDiquarkS1;}
-       if(isn && issb && iscc)         {final_quark = kPdgDQuark; diquark = kPdgDDDiquarkS1;}
-       if(isn && issb && (isnc||isem||isdm)) {final_quark = kPdgDQuark; diquark = kPdgUDDiquarkS1;}
-    }
-
-    // if the diquark is a ud, switch it to the singlet state with 50% probability
-    if(diquark == kPdgUDDiquarkS1) {
-      RandomGen * rnd = RandomGen::Instance();
-      double Rqq = rnd->RndHadro().Rndm();
-      if(Rqq<0.5) diquark = kPdgUDDiquarkS0;
-    }
-  }
-  assert(diquark!=0);
-
   //
   // PYTHIA -> HADRONIZATION
   //
@@ -298,7 +226,59 @@ TClonesArray *
 #ifdef __GENIE_PYTHIA8_ENABLED__
   LOG("Pythia8Had", pNOTICE)
         << "Fragmentation / Init System: "
-        << "q = " << final_quark << ", qq = " << diquark;
+        << "Hit q = " << final_quark << ", Final q = " << final_quark;
+
+  // Kinematics.
+  RefFrame_t rf = kRfLab; // LAB frame
+  TLorentzVector probe_p4       = *init_state.GetProbeP4(rf);
+  TLorentzVector hit_nucleon_p4 = target.HitNucP4();
+  TLorentzVector out_lepton_p4  = kinematics.FSLeptonP4();
+
+  Pythia8::Vec4 probeV4 = Pythia8::Vec4(
+      probe_p4.Px(), probe_p4.Py(), probe_p4.Pz(), probe_p4.E()
+      );
+  Pythia8::Vec4 hitNucV4 = Pythia8::Vec4(
+      hit_nucleon_p4.Px(), hit_nucleon_p4.Py(), hit_nucleon_p4.Pz(), hit_nucleon_p4.E()
+      );
+  Pythia8::Vec4 outLepV4 = Pythia8::Vec4(
+      out_lepton_p4.Px(), out_lepton_p4.Py(), out_lepton_p4.Pz(), out_lepton_p4.E()
+      );
+
+  // Neutrino energy in LAB frame.
+  double eNu = probeV4.e();
+
+  // Maximum neutrino energy allowable.
+  double eMax = 1e5; // GeV
+
+  // Setup Pythia object.
+  bool beamConfigExists = fPythia->BeamConfigExists(probe, hit_nucleon);
+  fPythia->InitializeBeam(probe, hit_nucleon, eMax);
+  Pythia8::Pythia      * pythia8     = fPythia->Pythia8();
+  Pythia8::LHAup_Genie * eventReader = fPythia->EventReader();
+  Pythia8::GBeamShape  * beamShape   = fPythia->GBeamShape();
+
+  // Boost to CMS of probe and hit nucleon.
+  Pythia8::RotBstMatrix toCMS;
+  toCMS.toCMframe(probeV4, hitNucV4);
+  probeV4.rotbst(toCMS);
+  hitNucV4.rotbst(toCMS);
+  outLepV4.rotbst(toCMS);
+
+  // Calculate hit quark momentum.
+  double Q2 = -(probe_p4 - out_lepton_p4).M2();
+  double x  = Q2 / (2 * hit_nucleon_p4.M() * (probe_p4.E() - out_lepton_p4.E()));
+  TLorentzVector hit_quark_p4   = TLorentzVector(
+      0., 0., -hit_nucleon_p4.M() * x, hit_nucleon_p4.M() * x
+  );
+  Pythia8::Vec4 hitQrkV4 = Pythia8::Vec4(
+      hit_quark_p4.Px(), hit_quark_p4.Py(), hit_quark_p4.Pz(), hit_quark_p4.E()
+  );
+
+  // Calculate final quark 4 momentum.
+  Pythia8::Vec4 finQrkV4 = probeV4 + hitQrkV4 - outLepV4;
+  double mom3_2 = pow(finQrkV4.px(),2)+pow(finQrkV4.py(),2)+pow(finQrkV4.pz(),2);
+  double finQrkMass_2 = pow(pythia8->particleData.m0(final_quark),2);
+  finQrkV4.e(sqrt(mom3_2+finQrkMass_2));
 
   // Determine how jetset treats un-stable particles appearing in hadronization
 
@@ -335,24 +315,67 @@ TClonesArray *
   fPythia->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaPP, true  ); // decay Delta++
 
   // -- hadronize --
-  double mA    = fPythia->Pythia8()->particleData.m0(final_quark);
-  double mB    = fPythia->Pythia8()->particleData.m0(diquark);
-  double pzAcm = 0.5 * Pythia8::sqrtpos( (W + mA + mB) * (W - mA - mB) * (W - mA + mB) * (W + mA - mB) ) / W;
-  double pzBcm = -pzAcm;
-  double eA    = sqrt(mA*mA + pzAcm*pzAcm);
-  double eB    = sqrt(mB*mB + pzBcm*pzBcm);
+  if (!beamConfigExists) {
+    // Set up Pythia to read hard scattering from external provider (via
+    // the Les Houches Event Accord functionalities)
+    pythia8->readString("ProcessLevel:all = on");
+    pythia8->readString("Beams:frameType = 5");
+    pythia8->readString("Check:beams = off");
+    pythia8->readString("TimeShower:QEDshowerByL  = off");
+    pythia8->readString("LesHouches:setLeptonMass = 2");
+    pythia8->readString("LesHouches:setQuarkMass  = 2");
+    pythia8->readString("LesHouches:matchInOut    = off");
+    pythia8->readString("LesHouches:mRecalculate   = 1e-6");  
+    pythia8->readString("Beams:allowMomentumSpread = on");
+    pythia8->readString("BeamRemnants:primordialKT = on");
+    pythia8->readString("BeamRemnants:primordialKTsoft = 0.0");
+    pythia8->readString("BeamRemnants:primordialKThard = 0.0");    
+    pythia8->readString("Print:quiet = on");
 
-  fPythia->Pythia8()->event.reset();
+    // Hand BeamShape pointer to Pythia.
+    pythia8->setBeamShapePtr(beamShape);
 
-  // Pythia8 status code for outgoing particles of the hardest subprocesses is 23
-  // anti/colour tags for these 2 particles must complement each other
-  fPythia->Pythia8()->event.append(final_quark, 23, 101, 0, 0., 0., pzAcm, eA, mA);
-  fPythia->Pythia8()->event.append(diquark    , 23, 0, 101, 0., 0., pzBcm, eB, mB);
-  fPythia->Pythia8()->next();
+    // Set up a global instance of LHAup.
+    eventReader->setPointers(&pythia8->settings);
+    eventReader->fillInit(
+        probe, hit_nucleon, eMax, pythia8->particleData.m0(hit_nucleon)
+    );
+    eventReader->setInit();
+    pythia8->setLHAupPtr(eventReader);
+
+    // Initialize Pythia.
+    pythia8->init();
+  }
+  else {
+    pythia8->event.reset();
+  }
+
+  // The variable neutrino energy can be handled using the BeamShape interface.
+  // I have to reinitialize the BeamShape in each event, but this is only
+  // because I want to set a parameter that represents the reduction in energy
+  // for the incoming neutrino.
+  pythia8->settings.parm("Beams:sigmaPzA", eNu);
+  beamShape->init(pythia8->settings, &pythia8->rndm);
+
+  // This should set the LHA event using fortran common blocks
+  eventReader->clearEvent();
+  eventReader->fillEventInfo(4, 1.0, 10.0);
+
+  // Incoming particles.
+  eventReader->fillNewParticle(probe,     -1, probeV4);
+  eventReader->fillNewParticle(hit_quark, -1, hitQrkV4);
+
+  // Outgoing particles.
+  eventReader->fillNewParticle(out_lepton,  1, outLepV4);
+  eventReader->fillNewParticle(final_quark, 1, finQrkV4);
+  eventReader->setEvent(); 
+
+  // Now call Pythia to process information.
+  pythia8->next();
 
   // List the event information
-  fPythia->Pythia8()->event.list();
-  fPythia->Pythia8()->stat();
+  pythia8->event.list();
+  pythia8->stat();
 
   // restore pythia decay settings so as not to interfere with decayer
   fPythia->Pythia8()->particleData.mayDecay(kPdgPi0,             pi0_decflag);
@@ -365,20 +388,31 @@ TClonesArray *
   fPythia->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaP, Dp_decflag);
   fPythia->Pythia8()->particleData.mayDecay(kPdgP33m1232_DeltaPP,Dpp_decflag);
 
-  // get record
-  Pythia8::Event &fEvent = fPythia->Pythia8()->event;
+// get record
+  Pythia8::Event &fEvent = pythia8->event;
   int numpart = fEvent.size();
-  assert(numpart>0);
-
-  // Offset the initial (system) particle
-  int ioff = 0;
-  if (fEvent[0].id() == 90) ioff = -1;
+  // assert(numpart>0);
+  if (numpart == 0) {
+     LOG("PythiaHad", pERROR) << "Returning a null particle list!";
+     return 0;
+  }
 #endif
 
   TClonesArray * particle_list = new TClonesArray("genie::GHepParticle", numpart);
   particle_list->SetOwner(true);
 
 #ifdef __GENIE_PYTHIA8_ENABLED__
+  // Offset the initial particles.
+  int ioff = -1; int ioffUpper = -1;
+  for (int i = 0; i < numpart; ++i) {
+    if (fEvent[i].status() > 80 && !(fEvent[i].id() == out_lepton)) {
+      ioff = fEvent[i].mother1();
+      ioffUpper = fEvent[i].mother2();
+      break;
+    }
+  }
+  assert(ioff > -1);
+
   // Hadronic 4vec
   TLorentzVector p4Had = kinematics.HadSystP4();
 
@@ -392,7 +426,7 @@ TClonesArray *
     /*
      * Convert Pythia8 status code to Pythia6
      * Initial quark has a pythia6 status code of 12
-     * The initial diquark and the fragmented particles have a pythia6 code
+     * The initial quark and the fragmented particles have a pythia6 code
      * of 11 (kIStNucleonTarget)
      * Final state particles have a positive pythia8 code and a pythia6 code of
      * 1 (kIStStableFinalState)
@@ -402,9 +436,25 @@ TClonesArray *
      * - boost it back to LAB' frame {z:=\vec{phad}} / doesn't affect pT
      * - rotate its 3-momentum from LAB' to LAB
      */
+
+    // Modify mother indexes.
+    int mother1 = fEvent[i].mother1();
+    int mother2 = fEvent[i].mother2();
+    if (mother1 < ioff) mother1 = -1;
+    else mother1 -= ioff;
+    if (mother2 < ioff) mother2 = -1;
+    else mother2 -= ioff;
+
+    // Modify daughter indexes.
+    int daughter1 = fEvent[i].daughter1();
+    int daughter2 = fEvent[i].daughter2();
+    if (daughter1 == 0) daughter1 = -1;
+    else daughter1 -= ioff;
+    if (daughter2 == 0) daughter2 = -1;
+    else daughter2 -= ioff;
+
     GHepStatus_t gStatus;
-    if (i == 1) gStatus = kIStDISPreFragmHadronicState;
-    else gStatus = (fEvent[i].status()>0) ? kIStStableFinalState : kIStNucleonTarget;
+    gStatus = (fEvent[i].status()>0) ? kIStStableFinalState : kIStNucleonTarget;
 
     LOG("PythiaHad", pDEBUG)
         << "Adding final state particle pdgc = " << fEvent[i].id()
@@ -429,20 +479,20 @@ TClonesArray *
 
     // insert the particle in the list
     new((*particle_list)[i]) GHepParticle(
-            fEvent[i].id(),               // pdg
-            gStatus,                      // status
-            fEvent[i].mother1()   + ioff, // first parent
-            fEvent[i].mother2()   + ioff, // second parent
-            fEvent[i].daughter1() + ioff, // first daughter
-            fEvent[i].daughter2() + ioff, // second daughter
-            p4.Px(),                      // px [GeV/c]
-            p4.Py(),                      // py [GeV/c]
-            p4.Pz(),                      // pz [GeV/c]
-            p4.Energy(),                  // e  [GeV]
-            fEvent[i].xProd(),            // x  [mm]
-            fEvent[i].yProd(),            // y  [mm]
-            fEvent[i].zProd(),            // z  [mm]
-            fEvent[i].tProd()             // t  [mm/c]
+            fEvent[i].id(),     // pdg
+            gStatus,            // status
+            mother1,            // first parent
+            mother2,            // second parent
+            daughter1,          // first daughter
+            daughter2,          // second daughter
+            p4.Px(),            // px [GeV/c]
+            p4.Py(),            // py [GeV/c]
+            p4.Pz(),            // pz [GeV/c]
+            p4.Energy(),        // e  [GeV]
+            fEvent[i].xProd(),  // x  [mm]
+            fEvent[i].yProd(),  // y  [mm]
+            fEvent[i].zProd(),  // z  [mm]
+            fEvent[i].tProd()   // t  [mm/c]
     );
   }
 #endif

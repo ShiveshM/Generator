@@ -123,8 +123,8 @@ void RandomGen::SetSeed(long int seed)
 #ifdef __GENIE_PYTHIA8_ENABLED__
   // Set the PYTHIA8 seed number
   Pythia8Singleton * pythia8 = Pythia8Singleton::Instance();
-  pythia8->Pythia8()->readString("ProcessLevel:all = off");
-  pythia8->Pythia8()->readString("Print:quiet      = on");
+  pythia8->Pythia8()->readString("Random:setSeed = on");
+  pythia8->Pythia8()->settings.mode("Random:seed", seed);
 #endif
 
   LOG("Rndm", pINFO) << "RndKine  seed = " << this->RndKine ().GetSeed();

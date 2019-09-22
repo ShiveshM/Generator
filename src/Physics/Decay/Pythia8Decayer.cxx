@@ -212,14 +212,18 @@ bool Pythia8Decayer::Decay(int decay_particle_id, GHepRecord * event) const
 void Pythia8Decayer::Initialize(void) const
 {
 #ifdef __GENIE_PYTHIA8_ENABLED__
-  fPythia = Pythia8Singleton::Instance();
   fWeight = 1.;
-  fPythia->Pythia8()->readString("ProcessLevel:all = off");
-  fPythia->Pythia8()->readString("Print:quiet      = on");
+
+  fPythia = Pythia8Singleton::Instance();
+  Pythia8::Pythia * pythia8 = fPythia->Pythia8();
+  pythia8->settings.resetAll();
+
+  pythia8->readString("ProcessLevel:all = off");
+  pythia8->readString("Print:quiet      = on");
 
   // sync GENIE/PYTHIA8 seeds
   RandomGen::Instance();
-  fPythia->Pythia8()->init();
+  pythia8->init();
 #endif
 }
 //____________________________________________________________________________

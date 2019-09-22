@@ -78,6 +78,11 @@ void CharmP8Hadronization::Initialize(void) const
 {
 #ifdef __GENIE_PYTHIA8_ENABLED__
   fPythia = Pythia8Singleton::Instance();
+  Pythia8::Pythia * pythia8 = fPythia->Pythia8();
+  pythia8->settings.resetAll();
+
+  // sync GENIE/PYTHIA8 seed number
+  RandomGen::Instance();
 
   fPythia->Pythia8()->readString("ProcessLevel:all = off");
   fPythia->Pythia8()->readString("Print:quiet      = on");

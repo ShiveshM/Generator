@@ -97,19 +97,21 @@ void GLRESP8Generator::ProcessEventRecord(GHepRecord * event) const
   //
 
   double mass = p4_W.M();
-  fPythia->Pythia8()->readString("Print:quiet           = on");
-  fPythia->Pythia8()->readString("PDF:lepton            = off");
-  fPythia->Pythia8()->readString("WeakBosonExchange:all = on");
+  Pythia8::Pythia * pythia8 = fPythia->Pythia8();
+  pythia8->settings.resetAll();
+  pythia8->readString("Print:quiet           = on");
+  pythia8->readString("PDF:lepton            = off");
+  pythia8->readString("WeakBosonExchange:all = on");
 
-  fPythia->Pythia8()->settings.mode("Beams:idA", -12); // nu_ebar
-  fPythia->Pythia8()->settings.mode("Beams:idB", 11); // e-
-  fPythia->Pythia8()->settings.mode("Beams:frameType", 1);
-  fPythia->Pythia8()->settings.parm("Beams:eCM", mass);
+  pythia8->settings.mode("Beams:idA", -12); // nu_ebar
+  pythia8->settings.mode("Beams:idB", 11); // e-
+  pythia8->settings.mode("Beams:frameType", 1);
+  pythia8->settings.parm("Beams:eCM", mass);
 
-  fPythia->Pythia8()->next();
-  fPythia->Pythia8()->event.list();
+  pythia8->next();
+  pythia8->event.list();
 
-  Pythia8::Event &fEvent = fPythia->Pythia8()->event;
+  Pythia8::Event &fEvent = pythia8->event;
   int numpart = fEvent.size();
   assert(numpart>0);
 
