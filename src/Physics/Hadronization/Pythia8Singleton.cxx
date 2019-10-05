@@ -192,6 +192,8 @@ Pythia8Singleton::Pythia8Singleton()
 
 #ifdef __GENIE_PYTHIA8_ENABLED__
     fPythia = new Pythia8::Pythia();
+    fEventReader = 0;
+    fBeamShape   = 0;
 #endif
 }
 //____________________________________________________________________________

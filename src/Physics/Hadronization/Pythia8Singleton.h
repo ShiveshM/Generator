@@ -53,7 +53,7 @@ public:
   // always with c = 1, so that e.g. time is in mm/c.
   virtual void pick();
 
-  double eMax = 80.;
+  double eMax;
   double pZspread;
   virtual void setSpread(double pIn) {pZspread = pIn;}
   
@@ -158,9 +158,9 @@ private:
 #ifdef __GENIE_PYTHIA8_ENABLED__
     map< pair<int, int>, pair<Pythia8::Pythia*,
       pair<Pythia8::LHAup_Genie*, Pythia8::GBeamShape*> > > beamMap;
-    Pythia8::Pythia      * fPythia      = 0; ///< PYTHIA8 instance
-    Pythia8::LHAup_Genie * fEventReader = 0; ///< LHAup instance
-    Pythia8::GBeamShape  * fBeamShape   = 0; ///< GBeamShape instance
+    Pythia8::Pythia      * fPythia;      ///< PYTHIA8 instance
+    Pythia8::LHAup_Genie * fEventReader; ///< LHAup instance
+    Pythia8::GBeamShape  * fBeamShape;   ///< GBeamShape instance
 #endif
 
 ClassDef(Pythia8Singleton,1)
